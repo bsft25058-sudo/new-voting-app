@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import React, { useState } from 'react';
 import Login from './Login';   // Cleaned path: removed /components/
 import Vote from './Vote';    // Cleaned path: removed /components/
 import Result from './Result';// Cleaned path: removed /components/
