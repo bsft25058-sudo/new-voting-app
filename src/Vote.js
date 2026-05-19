@@ -8,7 +8,7 @@ function Vote({ timeLeft }) {
     setLoading(true);
     setMessage('');
     try {
-      const response = await fetch('http://localhost:5000/api/vote', {
+      const response = await fetch('api/vote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

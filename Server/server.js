@@ -1,119 +1,81 @@
-const express = require("express");
-
-const mongoose = require("mongoose");
-
-const cors = require("cors");
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
 
 const app = express();
 
-app.use(cors());
-
+// ==========================================
+// 1. MIDDLEWARE
+// ==========================================
 app.use(express.json());
 
-// MongoDB Connection
-mongoose.connect(
-  "mongodb://localhost:27017/votingDB"
-)
-.then(() => {
+app.use(cors()); 
 
-  console.log("MongoDB Connected");
 
-})
+const MONGO_URI = 'mongodb+srv://TaimoorShahid:taimoor2007@online-voting-system.qi2aavk.mongodb.net/?appName=online-voting-system';
 
-.catch((err) => {
+mongoose.connect(MONGO_URI)
+    .then(() => console.log('MongoDB Connected to Cloud Atlas Successfully!'))
+    .catch(err => console.error('Database Connection Error:', err));
 
-  console.log(err);
-
-});
-
-// User Schema
-const UserSchema = new mongoose.Schema({
-
-  username: String,
-
-  password: String,
-
-  voterId: String
-
-});
-
-// User Model
-const User = mongoose.model(
-  "User",
-  UserSchema
-);
-
-// Register API
-app.post("/register", async (req, res) => {
-
-  try {
-
-    const existingUser = await User.findOne({
-
-      username: req.body.username
-
-    });
-
-    if (existingUser) {
-
-      return res.send(
-        "Username already exists"
-      );
-
+// ==========================================
+// 3. DATABASE SCHEMA & MODEL
+// ==========================================
+const VoteSchema = new mongoose.Schema({
+    candidate: {
+        type: String,
+        required: true
+    },
+    votedAt: {
+        type: Date,
+        default: Date.now
     }
-
-    const user = new User(req.body);
-
-    await user.save();
-
-    res.send("Registration Successful");
-
-  }
-
-  catch (error) {
-
-    console.log(error);
-
-    res.send("Server Error");
-
-  }
-
 });
 
-// Login API
-app.post("/login", async (req, res) => {
+const Vote = mongoose.model('Vote', VoteSchema);
 
-  const { username, password } = req.body;
+// ==========================================
+// 4. API ROUTES (Endpoints)
+// ==========================================
 
-  const user = await User.findOne({
-
-    username,
-
-    password
-
-  });
-
-  if (user) {
-
-    res.json(user);
-
-  }
-
-  else {
-
-    res.json({
-
-      message: "Invalid Username or Password"
-
-    });
-
-  }
-
+// Route to submit a new vote
+app.post('/api/vote', async (req, res) => {
+    try {
+        const { candidate } = req.body;
+        if (!candidate) {
+            return res.status(400).json({ success: false, message: 'Candidate selection required' });
+        }
+        
+        const newVote = new Vote({ candidate });
+        await newVote.save();
+        res.status(201).json({ success: true, message: 'Vote counted in MongoDB!' });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
-// Start Server
-app.listen(5000, () => {
+// Route to fetch and calculate total results
+app.get('/api/results', async (req, res) => {
+    try {
+        const results = await Vote.aggregate([
+            { $group: { _id: "$candidate", count: { $sum: 1 } } }
+        ]);
+        res.json(results);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
-  console.log("Server Started");
+// Test route to ensure server is live
+app.get('/', (req, res) => {
+    res.send('Voting System Backend Server is Running Live!');
+});
 
+// ==========================================
+// 5. START SERVER
+// ==========================================
+// Uses the live hosting port or defaults to 5000 locally
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });

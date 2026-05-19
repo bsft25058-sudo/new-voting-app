@@ -8,7 +8,7 @@ function Result() {
   useEffect(() => {
     const fetchResults = async () => {
       try {
-        const response = await fetch("http://localhost:5000/api/results");
+        const response = await fetch("/api/results");
         const data = await response.json();
         // Backend returns array: [ { _id: "PTI", count: 5 }, { _id: "PML(N)", count: 2 } ]
         setResults(data);
