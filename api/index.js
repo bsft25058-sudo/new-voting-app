@@ -12,7 +12,7 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log("Connected"))
     .catch(err => console.error(err));
 
-// Standard schema configurations matching your database folders
+// Explicit schema targets matching your existing Atlas collection names
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -55,7 +55,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// CHECK USER STATUS (This prevents the double voting trick)
+// STATUS CHECK
 app.get('/api/user-status', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.query.username });
@@ -65,12 +65,14 @@ app.get('/api/user-status', async (req, res) => {
     }
 });
 
-// SUBMIT VOTE
+// VOTE SUBMISSION
 app.post('/api/vote', async (req, res) => {
     try {
         const { username, candidate } = req.body;
-        const user = await User.findOne({ username });
 
+        if (!username) return res.status(400).json({ error: "User session lost! Please log in again." });
+
+        const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ error: "User not found" });
         if (user.hasVoted) return res.status(400).json({ error: "You already voted!" });
 

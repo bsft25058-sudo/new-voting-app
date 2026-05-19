@@ -2,116 +2,61 @@ import React, { useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const Login = ({ onLoginSuccess }) => {
-  const [isLoginView, setIsLoginView] = useState(true);
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', isError: false });
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!username.trim() || !password.trim()) {
-      setMessage({ text: 'Please fill in all fields.', isError: true });
-      return;
-    }
-
-    setLoading(true);
-    setMessage({ text: '', isError: false });
-
-    const endpoint = isLoginView ? '/api/login' : '/api/register';
-
+  const handleRegister = async () => {
+    setError(""); setMsg("");
     try {
-      const response = await fetch(endpoint, {
+      const res = await fetch('/api/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setMsg("Registered successfully! Now click Login.");
+    } catch (err) {
+      setError(err.message);
+    }
+  };
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Something went wrong.');
-      }
-
-      if (isLoginView) {
-        setMessage({ text: 'Login successful! Redirecting...', isError: false });
-        localStorage.setItem('username', data.username);
-        
-        if (typeof onLoginSuccess === 'function') {
-          onLoginSuccess(data.username);
-        }
-      } else {
-        setMessage({ text: 'Registration successful! Please login.', isError: false });
-        setIsLoginView(true);
-        setPassword('');
-      }
-
-    } catch (error) {
-      console.error('Authentication Error:', error);
-      setMessage({ text: error.message, isError: true });
-    } finally {
-      setLoading(false);
+  const handleLogin = async () => {
+    setError(""); setMsg("");
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      
+      // Send username up to App.js
+      onLoginSuccess(data.username);
+    } catch (err) {
+      setError(err.message);
     }
   };
 
   return (
-    <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
-      <div className="card p-4 shadow-sm" style={{ width: '100%', maxWidth: '400px' }}>
-        <h2 className="text-center text-primary mb-4">Online Voting System</h2>
-        <h4 className="text-center mb-3">{isLoginView ? 'Login' : 'Create New Account'}</h4>
-
-        {message.text && (
-          <div className={`alert ${message.isError ? 'alert-danger' : 'alert-success'} py-2 text-center`} role="alert">
-            {message.text}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Enter Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              disabled={loading}
-            />
-          </div>
-
-          <div className="mb-3">
-            <input
-              type="password"
-              className="form-control"
-              placeholder="Enter Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={loading}
-            />
-          </div>
-
-          <button
-            type="submit"
-            className={`btn ${isLoginView ? 'btn-primary' : 'btn-success'} w-100 py-2 mb-2`}
-            disabled={loading}
-          >
-            {loading ? 'Processing...' : isLoginView ? 'Login' : 'Register Account'}
-          </button>
-        </form>
-
-        <button
-          className="btn btn-warning text-white w-100 py-2"
-          onClick={() => {
-            setIsLoginView(!isLoginView);
-            setMessage({ text: '', isError: false });
-            setPassword('');
-          }}
-          disabled={loading}
-        >
-          {isLoginView ? 'Create New Account' : 'Already have an account? Login'}
-        </button>
+    <div className="container mt-5" style={{ maxWidth: '400px' }}>
+      <div className="card p-4 shadow">
+        <h3 className="text-center mb-4">E-Voting System</h3>
+        {error && <div className="alert alert-danger">{error}</div>}
+        {msg && <div className="alert alert-success">{msg}</div>}
+        <div className="mb-3">
+          <label>Username</label>
+          <input type="text" className="form-control" value={username} onChange={e => setUsername(e.target.value)} />
+        </div>
+        <div className="mb-3">
+          <label>Password</label>
+          <input type="password" className="form-control" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+        <button className="btn btn-primary w-100 mb-2" onClick={handleLogin}>Login</button>
+        <button className="btn btn-secondary w-100" onClick={handleRegister}>Register New Account</button>
       </div>
     </div>
   );
