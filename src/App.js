@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import Login from './components/Login';
-import Vote from './components/Vote'; // Configured to use your exact file name
-import Result from './components/Result';
+import React, { useState } from 'react';
+import Login from './Login';   // Cleaned path: removed /components/
+import Vote from './Vote';    // Cleaned path: removed /components/
+import Result from './Result';// Cleaned path: removed /components/
 import 'bootstrap/dist/css/bootstrap.min.css';
+
 
 function App() {
   // Global user state tracking
