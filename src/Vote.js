@@ -6,12 +6,27 @@ const Vote = ({ username }) => {
   const [hasVoted, setHasVoted] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(1800); // 30-minute session countdown
+  // Set your timer duration here (e.g., 300 = 5 minutes, 600 = 10 minutes)
+  const CUSTOM_DURATION = 300; 
+
+  const [timeLeft, setTimeLeft] = useState(() => {
+    const existingExpiry = localStorage.getItem('voting_session_expiry');
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+
+    if (existingExpiry) {
+      const delta = parseInt(existingExpiry, 10) - currentTimestamp;
+      return delta > 0 ? delta : 0;
+    } else {
+      const targetExpiry = currentTimestamp + CUSTOM_DURATION;
+      localStorage.setItem('voting_session_expiry', targetExpiry.toString());
+      return CUSTOM_DURATION;
+    }
+  });
 
   // Fetch live polling updates from database via unified Vercel endpoint
   const fetchResults = async () => {
     try {
-      const response = await fetch('/api/results');
+      const response = await fetch('/api/result');
       if (!response.ok) throw new Error('Could not synchronize data with database server.');
       const data = await response.json();
       setResults(data);

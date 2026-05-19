@@ -10,7 +10,7 @@ const Result = () => {
   const fetchResults = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/results');
+      const response = await fetch('/api/result');
       
       if (!response.ok) {
         throw new Error('Failed to fetch the latest polling figures.');
