@@ -3,88 +3,118 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
-// MongoDB Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://TaimoorShahid:taimoor2007@online-voting.system.mongodb.net/?retryWrites=true&w=majority';
 
-mongoose.connect(MONGO_URI, {
-  serverSelectionTimeoutMS: 5000,
-  socketTimeoutMS: 45000,
-})
-.then(() => console.log("MongoDB Connected Successfully!"))
-.catch((err) => console.error("MongoDB Connection Error:", err));
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://root:root@cluster0.mongodb.net/voting_db?retryWrites=true&w=majority";
 
-// Schemas & Models
-const UserSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true }
+mongoose.connect(MONGO_URI)
+    .then(() => console.log("Successfully connected to MongoDB Cloud Cluster."))
+    .catch(err => console.error("MongoDB connection error:", err));
+
+
+const userSchema = new mongoose.Schema({
+    username: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    hasVoted: { type: Boolean, default: false } // Stops users from duplicate voting
 });
-const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
-const VoteSchema = new mongoose.Schema({
-  candidate: { type: String, required: true },
-  votedAt: { type: Date, default: Date.now }
+
+const tallySchema = new mongoose.Schema({
+    PTI: { type: Number, default: 0 },
+    PMLN: { type: Number, default: 0 },
+    Independent: { type: Number, default: 0 }
 });
-const Vote = mongoose.models.Vote || mongoose.model('Vote', VoteSchema);
 
-// Registration Endpoint
+const User = mongoose.models.User || mongoose.model('User', userSchema);
+const Tally = mongoose.models.Tally || mongoose.model('Tally', tallySchema);
+
+
+// Register a new voter account
 app.post('/api/register', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    if (!username || !password) return res.status(400).json({ error: "Username and password are required" });
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: "Missing fields" });
 
-    const existingUser = await User.findOne({ username });
-    if (existingUser) return res.status(400).json({ error: "Username already taken" });
+        const existingUser = await User.findOne({ username });
+        if (existingUser) return res.status(400).json({ error: "Username already taken." });
 
-    const newUser = new User({ username, password });
-    await newUser.save();
-    return res.status(201).json({ message: "Registration successful!" });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to register user" });
-  }
+        const newUser = new User({ username, password, hasVoted: false });
+        await newUser.save();
+        res.json({ success: true, message: "Account registered successfully!" });
+    } catch (err) {
+        res.status(500).json({ error: "Registration error." });
+    }
 });
 
-// Login Endpoint
 app.post('/api/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    const user = await User.findOne({ username, password });
-    if (!user) return res.status(401).json({ error: "Invalid username or password" });
-    return res.status(200).json({ message: "Login successful!", username: user.username });
-  } catch (error) {
-    return res.status(500).json({ error: "Server error during login" });
-  }
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username, password });
+        if (!user) return res.status(400).json({ error: "Invalid username or password." });
+
+        res.json({ success: true, username: user.username, hasVoted: user.hasVoted });
+    } catch (err) {
+        res.status(500).json({ error: "Login error." });
+    }
 });
 
-// Submit Vote Endpoint
+
 app.post('/api/vote', async (req, res) => {
-  try {
-    const { candidate } = req.body;
-    if (!candidate) return res.status(400).json({ error: "Candidate selection is required" });
+    try {
+        const { username, candidate } = req.body;
 
-    const newVote = new Vote({ candidate });
-    await newVote.save();
-    return res.status(201).json({ message: "Vote cast successfully!" });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to submit your vote" });
-  }
+        if (!username || !candidate) {
+            return res.status(400).json({ error: "Missing profile context or candidate selection." });
+        }
+
+       
+        const user = await User.findOne({ username });
+        if (!user) {
+            return res.status(404).json({ error: "User not found. Please log in again." });
+        }
+
+        
+        if (user.hasVoted) {
+            return res.status(400).json({ error: "Security Restriction: You have already cast your ballot!" });
+        }
+
+        
+        await Tally.findOneAndUpdate(
+            {}, 
+            { $inc: { [candidate]: 1 } }, 
+            { new: true, upsert: true }
+        );
+
+        
+        user.hasVoted = true;
+        await user.save();
+
+       
+        const anonymousBallotId = "VOTE-" + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+        
+        res.json({ 
+            success: true, 
+            message: `Your ballot was registered securely.`,
+            votingId: anonymousBallotId 
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Internal server data exception error." });
+    }
 });
 
-// Get Election Results Endpoint
-app.get('/api/results', async (req, res) => {
-  try {
-    const votes = await Vote.find();
-    const results = { PTI: 0, PMLN: 0, Independent: 0 };
-    votes.forEach(vote => {
-      if (results[vote.candidate] !== undefined) results[vote.candidate]++;
-    });
-    return res.status(200).json(results);
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to fetch polling results" });
-  }
+
+app.get('/api/result', async (req, res) => {
+    try {
+        const counts = await Tally.findOne({});
+        res.json(counts || { PTI: 0, PMLN: 0, Independent: 0 });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to grab live results." });
+    }
 });
 
-// Export app for Vercel Serverless environment handling
 module.exports = app;
