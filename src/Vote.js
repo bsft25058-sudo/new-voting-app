@@ -49,31 +49,30 @@ const Vote = ({ username }) => {
     const fetchResults = useCallback(async () => {
         try {
             const response = await fetch('/api/result');
-            if (!response.ok) throw new Error('Failed to synchronize current poll data frames.');
+            if (!response.ok) throw new Error('Failed to synchronize poll data metrics.');
             const data = await response.json();
             setResults(data);
-            setError(null);
         } catch (err) {
             console.error(err);
-            setError('Failed to establish remote server handshake.');
         }
     }, []);
 
-    // NEW SYNCHRONIZATION EFFECT: Checks if logged-in user has voted previously in the database
+    // LIVE RUNTIME CHECK: Double check right when screen loads if user has voted
     useEffect(() => {
         const syncUserSessionWithDatabase = async () => {
             if (!username) return;
             try {
-                // 1. Fetch live scoreboard metrics
                 await fetchResults();
 
-                // 2. Ask backend if this user profile has voted in the past
                 const response = await fetch(`/api/user-status?username=${encodeURIComponent(username)}`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.hasVoted) {
+                    if (data && data.hasVoted === true) {
                         setHasVoted(true);
                         setSuccessMessage("Welcome back! Your secure ballot was successfully verified in the database archive.");
+                    } else {
+                        setHasVoted(false);
+                        setSuccessMessage(null);
                     }
                 }
             } catch (err) {
