@@ -1,235 +1,131 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
-function Login({ setUser }) {
+const Login = ({ onLoginSuccess }) => {
+  const [isLoginView, setIsLoginView] = useState(true);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ text: '', isError: false });
 
-  const [isLogin, setIsLogin] = useState(true);
-
-  const [username, setUsername] = useState("");
-
-  const [password, setPassword] = useState("");
-
-  // =========================
   
-  // =========================
-
-  const handleSubmit = async () => {
-
-    // Validation
-    if (!username) {
-
-      alert("Username is required");
-
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!username.trim() || !password.trim()) {
+      setMessage({ text: 'Please fill in all fields.', isError: true });
       return;
-
     }
 
-    if (!password) {
+    setLoading(true);
+    setMessage({ text: '', isError: false });
 
-      alert("Password is required");
+   
+    const endpoint = isLoginView ? '/api/login' : '/api/register';
 
-      return;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
 
-    }
+      const data = await response.json();
 
-    // =========================
-    // LOGIN
-    // =========================
+      if (!response.ok) {
+        
+        throw new Error(data.error || 'Something went wrong.');
+      }
 
-    if (isLogin) {
-
-      try {
-
-        const response = await fetch(
-  "/api/login",
-  {
-    method: "POST",
-            headers: {
-
-              "Content-Type": "application/json"
-
-            },
-
-            body: JSON.stringify({
-
-              username,
-
-              password
-
-            })
-
-          }
-        );
-
-        const data = await response.json();
-
-        // Invalid login
-        if (data.message) {
-
-          alert(data.message);
-
-          return;
-
+      if (isLoginView) {
+        // --- LOGIN SUCCESS ---
+        setMessage({ text: 'Login successful! Redirecting...', isError: false });
+        
+        // Save auth data to localStorage
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('username', data.username);
+        
+        // Trigger state change to display the voting dashboard layout
+        if (typeof onLoginSuccess === 'function') {
+          onLoginSuccess(data.username);
         }
-
-        // Save user
-        localStorage.setItem(
-          "user",
-          JSON.stringify(data)
-        );
-
-        setUser(data);
-
-        alert("Login Successful");
-
+      } else {
+        // --- REGISTRATION SUCCESS ---
+        setMessage({ text: 'Registration successful! Please login.', isError: false });
+        setIsLoginView(true); // Toggle automatically to login page view
+        setPassword('');      // Clear password field for security
       }
 
-      catch (error) {
-
-        console.log(error);
-
-        alert("Server Error");
-
-      }
-
+    } catch (error) {
+      console.error('Authentication Error:', error);
+      setMessage({ text: error.message, isError: true });
+    } finally {
+      setLoading(false);
     }
-
-    // =========================
-    // REGISTER
-    // =========================
-
-    else {
-
-      try {
-
-        // Create voter ID
-        const voterId =
-          "VOTER-" +
-          Math.floor(Math.random() * 10000);
-
-        const response = await fetch(
-  "/api/register",
-  
-          {
-
-            method: "POST",
-
-            headers: {
-
-              "Content-Type": "application/json"
-
-            },
-
-            body: JSON.stringify({
-
-              username,
-
-              password,
-
-              voterId
-
-            })
-
-          }
-        );
-
-        const data = await response.text();
-
-        alert(data);
-
-        // Clear Inputs
-        setUsername("");
-
-        setPassword("");
-
-        // Go to login screen
-        setIsLogin(true);
-
-      }
-
-      catch (error) {
-
-        console.log(error);
-
-        alert("Server Error");
-
-      }
-
-    }
-
   };
 
   return (
+    <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
+      <div className="card p-4 shadow-sm" style={{ width: '100%', maxWidth: '400px' }}>
+        <h2 className="text-center text-primary mb-4">Online Voting System</h2>
+        <h4 className="text-center mb-3">{isLoginView ? 'Login' : 'Create New Account'}</h4>
 
-    <div className="row justify-content-center">
+        {/* Status Message Display */}
+        {message.text && (
+          <div className={`alert ${message.isError ? 'alert-danger' : 'alert-success'} py-2 text-center`} role="alert">
+            {message.text}
+          </div>
+        )}
 
-      <div className="col-md-5">
+        <form onSubmit={handleSubmit}>
+          <div className="mb-3">
+            <input
+              type="text"
+              className="form-control"
+              placeholder="Enter Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
-        <div className="card login-card shadow-lg p-4">
-
-          <h2 className="text-center text-primary mb-4">
-
-            {isLogin ? "Login" : "Register"}
-
-          </h2>
-
-          {/* Username */}
-
-          <input
-            type="text"
-            placeholder="Enter Username"
-            className="form-control mb-3"
-            value={username}
-            onChange={(e) =>
-              setUsername(e.target.value)
-            }
-          />
-
-          {/* Password */}
-
-          <input
-            type="password"
-            placeholder="Enter Password"
-            className="form-control mb-3"
-            value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
-          />
-
-          {/* Main Button */}
+          <div className="mb-3">
+            <input
+              type="password"
+              className="form-control"
+              placeholder="Enter Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
+          </div>
 
           <button
-            className="btn btn-primary w-100 mb-3"
-            onClick={handleSubmit}
+            type="submit"
+            className={`btn ${isLoginView ? 'btn-primary' : 'btn-success'} w-100 py-2 mb-2`}
+            disabled={loading}
           >
-
-            {isLogin ? "Login" : "Register"}
-
+            {loading ? 'Processing...' : isLoginView ? 'Login' : 'Register Account'}
           </button>
+        </form>
 
-          {/* Switch Button */}
-
-          <button
-            className="btn btn-warning w-100"
-            onClick={() =>
-              setIsLogin(!isLogin)
-            }
-          >
-
-            {isLogin
-              ? "Create New Account"
-              : "Already Have Account"}
-
-          </button>
-
-        </div>
-
+        {/* View Toggle Button */}
+        <button
+          className="btn btn-warning text-white w-100 py-2"
+          onClick={() => {
+            setIsLoginView(!isLoginView);
+            setMessage({ text: '', isError: false });
+            setPassword('');
+          }}
+          disabled={loading}
+        >
+          {isLoginView ? 'Create New Account' : 'Already have an account? Login'}
+        </button>
       </div>
-
     </div>
-
   );
-
-}
+};
 
 export default Login;
