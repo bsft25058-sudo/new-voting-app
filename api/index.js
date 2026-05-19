@@ -6,32 +6,33 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-
+// ----------------------------------------------------
+// DATABASE CONNECTION & MONGODB SCHEMAS
+// ----------------------------------------------------
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://root:root@cluster0.mongodb.net/voting_db?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log("Successfully connected to MongoDB Cloud Cluster."))
     .catch(err => console.error("MongoDB connection error:", err));
 
-
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    hasVoted: { type: Boolean, default: false } // Stops users from duplicate voting
+    hasVoted: { type: Boolean, default: false }
 });
 
-
-const tallySchema = new mongoose.Schema({
+const voteCountSchema = new mongoose.Schema({
     PTI: { type: Number, default: 0 },
     PMLN: { type: Number, default: 0 },
     Independent: { type: Number, default: 0 }
 });
 
 const User = mongoose.models.User || mongoose.model('User', userSchema);
-const Tally = mongoose.models.Tally || mongoose.model('Tally', tallySchema);
+const VoteCount = mongoose.models.VoteCount || mongoose.model('VoteCount', voteCountSchema);
 
-
-// Register a new voter account
+// ----------------------------------------------------
+// AUTHENTICATION ROUTES (LOGIN & REGISTER)
+// ----------------------------------------------------
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -54,13 +55,35 @@ app.post('/api/login', async (req, res) => {
         const user = await User.findOne({ username, password });
         if (!user) return res.status(400).json({ error: "Invalid username or password." });
 
-        res.json({ success: true, username: user.username, hasVoted: user.hasVoted });
+        // FIX: Explicitly send back the user's voting status on login
+        res.json({ 
+            success: true, 
+            username: user.username, 
+            hasVoted: user.hasVoted 
+        });
     } catch (err) {
         res.status(500).json({ error: "Login error." });
     }
 });
 
+// NEW FIX ENDPOINT: Let the frontend query a user's status after logging back in
+app.get('/api/user-status', async (req, res) => {
+    try {
+        const { username } = req.query;
+        if (!username) return res.status(400).json({ error: "Missing username parameter" });
 
+        const user = await User.findOne({ username });
+        if (!user) return res.status(404).json({ error: "User not found" });
+
+        res.json({ hasVoted: user.hasVoted });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch user state." });
+    }
+});
+
+// ----------------------------------------------------
+// CORE BALLOT ROUTE (WITH DOUBLE-VOTE BLOCK)
+// ----------------------------------------------------
 app.post('/api/vote', async (req, res) => {
     try {
         const { username, candidate } = req.body;
@@ -69,32 +92,27 @@ app.post('/api/vote', async (req, res) => {
             return res.status(400).json({ error: "Missing profile context or candidate selection." });
         }
 
-       
         const user = await User.findOne({ username });
         if (!user) {
-            return res.status(404).json({ error: "User not found. Please log in again." });
+            return res.status(404).json({ error: "User not found." });
         }
 
-        
         if (user.hasVoted) {
             return res.status(400).json({ error: "Security Restriction: You have already cast your ballot!" });
         }
 
-        
-        await Tally.findOneAndUpdate(
+        // Increments candidate tally inside 'votecounts' collection
+        await VoteCount.findOneAndUpdate(
             {}, 
             { $inc: { [candidate]: 1 } }, 
             { new: true, upsert: true }
         );
 
-        
         user.hasVoted = true;
         await user.save();
 
-       
         const anonymousBallotId = "VOTE-" + Math.random().toString(36).substring(2, 9).toUpperCase();
 
-        
         res.json({ 
             success: true, 
             message: `Your ballot was registered securely.`,
@@ -107,10 +125,12 @@ app.post('/api/vote', async (req, res) => {
     }
 });
 
-
+// ----------------------------------------------------
+// LIVE STATISTICS ENDPOINT
+// ----------------------------------------------------
 app.get('/api/result', async (req, res) => {
     try {
-        const counts = await Tally.findOne({});
+        const counts = await VoteCount.findOne({});
         res.json(counts || { PTI: 0, PMLN: 0, Independent: 0 });
     } catch (err) {
         res.status(500).json({ error: "Failed to grab live results." });

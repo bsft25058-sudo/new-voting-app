@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 const Vote = ({ username }) => {
@@ -6,11 +6,10 @@ const Vote = ({ username }) => {
     const [hasVoted, setHasVoted] = useState(false);
     const [error, setError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    const [anonymousId, setAnonymousId] = useState(""); // Holds random receipt id tracking string token
+    const [anonymousId, setAnonymousId] = useState("");
     
-    const CUSTOM_DURATION = 300; // 5 Minutes core countdown parameter window
+    const CUSTOM_DURATION = 300;
 
-    // LocalStorage initial validation block setting the session epoch timestamp checkpoint
     const [timeLeft, setTimeLeft] = useState(() => {
         const existingExpiry = localStorage.getItem('voting_session_expiry');
         const currentTimestamp = Math.floor(Date.now() / 1000);
@@ -25,7 +24,6 @@ const Vote = ({ username }) => {
         }
     });
 
-    // Enforces the standard clock decrements looping sequence framework ruleset
     useEffect(() => {
         if (timeLeft <= 0) return;
 
@@ -42,15 +40,13 @@ const Vote = ({ username }) => {
         return () => clearInterval(timerInterval);
     }, [timeLeft]);
 
-    // Simple formatting rule wrapper outputs matching MM:SS UI string layout criteria
     const formatTimeDisplay = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
-    // Synchronizes view state values with MongoDB parameters using GET calls
-    const fetchResults = async () => {
+    const fetchResults = useCallback(async () => {
         try {
             const response = await fetch('/api/result');
             if (!response.ok) throw new Error('Failed to synchronize current poll data frames.');
@@ -59,17 +55,36 @@ const Vote = ({ username }) => {
             setError(null);
         } catch (err) {
             console.error(err);
-            setError('Failed to establish remote server handshake context data stream.');
+            setError('Failed to establish remote server handshake.');
         }
-    };
-
-    useEffect(() => {
-        fetchResults();
     }, []);
 
-    // Form payload posting request framework validating parameters before network executions
+    // NEW SYNCHRONIZATION EFFECT: Checks if logged-in user has voted previously in the database
+    useEffect(() => {
+        const syncUserSessionWithDatabase = async () => {
+            if (!username) return;
+            try {
+                // 1. Fetch live scoreboard metrics
+                await fetchResults();
+
+                // 2. Ask backend if this user profile has voted in the past
+                const response = await fetch(`/api/user-status?username=${encodeURIComponent(username)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.hasVoted) {
+                        setHasVoted(true);
+                        setSuccessMessage("Welcome back! Your secure ballot was successfully verified in the database archive.");
+                    }
+                }
+            } catch (err) {
+                console.error("Session sync failed:", err);
+            }
+        };
+
+        syncUserSessionWithDatabase();
+    }, [username, fetchResults]);
+
     const handleVoteSubmission = async (candidateName) => {
-        // ENFORCE TIMER CHECK BEFORE FIRING REQUEST
         if (timeLeft === 0) {
             setError("Voting window deadline has reached zero! Ballot entry blocked.");
             return;
@@ -88,26 +103,24 @@ const Vote = ({ username }) => {
             const data = await response.json();
 
             if (!response.ok) {
-                throw new Error(data.error || 'Network cluster rejected balloting payload submission request.');
+                throw new Error(data.error || 'Network cluster rejected balloting payload submission.');
             }
 
-            // Bind the returned alphanumeric tracking token payload string right to app memory
             if (data.votingId) {
                 setAnonymousId(data.votingId);
             }
 
             setHasVoted(true);
             setSuccessMessage(data.message);
-            fetchResults(); // Trigger dynamic display counters refresh
+            fetchResults(); 
         } catch (err) {
-            setError(err.message || 'Remote socket cluster communication disruption anomaly encountered.');
+            setError(err.message || 'Remote socket cluster communication disruption encountered.');
         }
     };
 
     return (
         <div className="container mt-5" style={{ maxWidth: '600px' }}>
             <div className="card shadow-lg p-4 border-0 rounded-4">
-                {/* Interface Context Status Metrics Headers Container View */}
                 <div className="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <h2 className="mb-0 text-primary fw-extrabold tracking-tight">E-Ballot Box</h2>
@@ -120,33 +133,30 @@ const Vote = ({ username }) => {
 
                 <hr className="opacity-10 my-3" />
 
-                {/* Subtitle Hint Banner Wrapper Context Panel */}
                 {timeLeft > 0 && !hasVoted && (
                     <p className="text-center text-muted small my-3 italic">
                         Please cast your selection carefully. Ballots are encrypted and submission operations are irreversible.
                     </p>
                 )}
 
-                {/* Interactive System Issue Notification Panel Frame Container */}
                 {error && <div className="alert alert-danger text-center fw-bold border-0 shadow-sm rounded-3">{error}</div>}
 
-                {/* COMPLETED RESPONSE STATUS RENDER INTERFACE PANEL BLOCK WITH GENERATED ANONYMOUS SLIDE SYNC RECEIPTS */}
                 {hasVoted && successMessage && (
                     <div className="alert alert-success border-0 shadow-sm text-center py-4 my-4 rounded-4 bg-opacity-10">
                         <div className="display-4 mb-2">✔️</div>
-                        <h4 className="fw-extrabold text-success text-uppercase tracking-wide">Ballot Count Complete</h4>
+                        <h4 className="fw-extrabold text-success text-uppercase tracking-wide">Ballot Complete</h4>
                         <p className="mb-3 text-secondary small">{successMessage}</p>
                         
-                        <div className="bg-white border rounded-3 p-3 shadow-sm mx-auto" style={{ maxWidth: '400px' }}>
-                            <span className="text-muted d-block font-monospace tracking-wider text-uppercase small mb-1">Secure Anonymous Ballot ID Receipt</span>
-                            <span className="font-monospace fs-4 fw-black text-dark tracking-widest">{anonymousId}</span>
-                        </div>
+                        {anonymousId && (
+                            <div className="bg-white border rounded-3 p-3 shadow-sm mx-auto" style={{ maxWidth: '400px' }}>
+                                <span className="text-muted d-block font-monospace tracking-wider text-uppercase small mb-1">Secure Anonymous Ballot ID Receipt</span>
+                                <span className="font-monospace fs-4 fw-black text-dark tracking-widest">{anonymousId}</span>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {/* CORE OPERATIONAL BALLOT INTERACTION ACTION BOARD PANELS CONTAINER SELECTION */}
                 <div className="my-4">
-                    {/* PTI Operational Element Block Entry Layout Trigger Row */}
                     <button 
                         className="btn btn-outline-success w-100 py-3 mb-3 fw-bold text-start rounded-3 d-flex justify-content-between align-items-center shadow-sm"
                         disabled={timeLeft === 0 || hasVoted}
@@ -156,7 +166,6 @@ const Vote = ({ username }) => {
                         {hasVoted && <span className="badge bg-success shadow-sm rounded-pill font-monospace">{results.PTI || 0} Votes</span>}
                     </button>
 
-                    {/* PMLN Operational Element Block Entry Layout Trigger Row */}
                     <button 
                         className="btn btn-outline-primary w-100 py-3 mb-3 fw-bold text-start rounded-3 d-flex justify-content-between align-items-center shadow-sm"
                         disabled={timeLeft === 0 || hasVoted}
@@ -166,7 +175,6 @@ const Vote = ({ username }) => {
                         {hasVoted && <span className="badge bg-primary shadow-sm rounded-pill font-monospace">{results.PMLN || 0} Votes</span>}
                     </button>
 
-                    {/* Independent Operational Element Block Entry Layout Trigger Row */}
                     <button 
                         className="btn btn-outline-warning w-100 py-3 mb-3 fw-bold text-start text-dark rounded-3 d-flex justify-content-between align-items-center shadow-sm"
                         disabled={timeLeft === 0 || hasVoted}
@@ -177,7 +185,6 @@ const Vote = ({ username }) => {
                     </button>
                 </div>
 
-                {/* Absolute Target Time Limit Deadline Reached Lock Warning Notification Message Area */}
                 {timeLeft === 0 && (
                     <div className="alert bg-light border text-secondary text-center fw-bold text-uppercase small tracking-widest rounded-3 mt-2 shadow-sm py-3">
                         🚫 Balloting Window Closed • Session Concluded
