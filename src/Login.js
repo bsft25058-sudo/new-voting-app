@@ -8,7 +8,6 @@ const Login = ({ onLoginSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', isError: false });
 
-  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -20,7 +19,6 @@ const Login = ({ onLoginSuccess }) => {
     setLoading(true);
     setMessage({ text: '', isError: false });
 
-   
     const endpoint = isLoginView ? '/api/login' : '/api/register';
 
     try {
@@ -35,27 +33,20 @@ const Login = ({ onLoginSuccess }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        
         throw new Error(data.error || 'Something went wrong.');
       }
 
       if (isLoginView) {
-        // --- LOGIN SUCCESS ---
         setMessage({ text: 'Login successful! Redirecting...', isError: false });
-        
-        // Save auth data to localStorage
-        localStorage.setItem('token', data.token);
         localStorage.setItem('username', data.username);
         
-        // Trigger state change to display the voting dashboard layout
         if (typeof onLoginSuccess === 'function') {
           onLoginSuccess(data.username);
         }
       } else {
-        // --- REGISTRATION SUCCESS ---
         setMessage({ text: 'Registration successful! Please login.', isError: false });
-        setIsLoginView(true); // Toggle automatically to login page view
-        setPassword('');      // Clear password field for security
+        setIsLoginView(true);
+        setPassword('');
       }
 
     } catch (error) {
@@ -72,7 +63,6 @@ const Login = ({ onLoginSuccess }) => {
         <h2 className="text-center text-primary mb-4">Online Voting System</h2>
         <h4 className="text-center mb-3">{isLoginView ? 'Login' : 'Create New Account'}</h4>
 
-        {/* Status Message Display */}
         {message.text && (
           <div className={`alert ${message.isError ? 'alert-danger' : 'alert-success'} py-2 text-center`} role="alert">
             {message.text}
@@ -111,7 +101,6 @@ const Login = ({ onLoginSuccess }) => {
           </button>
         </form>
 
-        {/* View Toggle Button */}
         <button
           className="btn btn-warning text-white w-100 py-2"
           onClick={() => {

@@ -1,110 +1,122 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from 'react';
+import 'bootstrap/dist/css/bootstrap.min.css';
 
-function Result() {
-  const [results, setResults] = useState([]);
+const Result = () => {
+  const [results, setResults] = useState({ PTI: 0, PMLN: 0, Independent: 0 });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Fetch results from MongoDB when component mounts
-  useEffect(() => {
-    const fetchResults = async () => {
-      try {
-        const response = await fetch("/api/results");
-        const data = await response.json();
-        // Backend returns array: [ { _id: "PTI", count: 5 }, { _id: "PML(N)", count: 2 } ]
-        setResults(data);
-      } catch (error) {
-        console.error("Error fetching data from MongoDB:", error);
-      } finally {
-        setLoading(false);
+  // Fetch real-time election results from our new unified api endpoint
+  const fetchResults = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch('/api/results');
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch the latest polling figures.');
       }
-    };
+      
+      const data = await response.json();
+      setResults(data);
+      setError(null);
+    } catch (err) {
+      console.error("Results Fetch Error:", err);
+      setError("Unable to sync with the live tally server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchResults();
+    // Optional: Refresh results automatically every 10 seconds to keep it live
+    const interval = setInterval(fetchResults, 10000);
+    return () => clearInterval(interval);
   }, []);
 
-  // --- Rebuilding your exact dynamic metrics from MongoDB Data ---
-  
-  // 1. Map MongoDB results array to a clean object matching your old format
-  const votesObj = { "PTI": 0, "PML(N)": 0, "IN-DEPENDENT": 0 };
-  results.forEach(item => {
-    if (item._id in votesObj) {
-      votesObj[item._id] = item.count;
-    }
-  });
-
-  // 2. Get Anonymous Voter IDs from localStorage audit sync
-  const voters = JSON.parse(localStorage.getItem("voters")) || [];
-
-  // 3. Dynamic calculations (matching your old algorithms perfectly!)
-  const totalVotes = Object.values(votesObj).reduce((a, b) => a + b, 0);
-  const maxVotes = Math.max(...Object.values(votesObj));
-  
-  const winners = totalVotes > 0 
-    ? Object.keys(votesObj).filter((candidate) => votesObj[candidate] === maxVotes)
-    : [];
-
-  if (loading) {
-    return (
-      <div className="text-center py-5 text-white">
-        <h3>Loading Real-Time Tallies from MongoDB...</h3>
-      </div>
-    );
-  }
+  // Calculate totals and percentages safely to avoid division by zero errors
+  const totalVotes = results.PTI + results.PMLN + results.Independent;
+  const calculatePercentage = (votes) => {
+    if (totalVotes === 0) return 0;
+    return ((votes / totalVotes) * 100).toFixed(1);
+  };
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-md-8">
-        <div className="card result-card shadow-lg p-4">
-          <h2 className="text-center text-success mb-4">Voting Results</h2>
-
-          {/* Total Votes */}
-          <h4 className="text-center mb-4">Total Votes: {totalVotes}</h4>
-
-          {/* Candidate Results */}
-          <ul className="list-group mb-4">
-            {Object.entries(votesObj).map(([candidate, count], index) => (
-              <li
-                key={index}
-                className="list-group-item d-flex justify-content-between align-items-center"
-              >
-                <strong>{candidate}</strong>
-                <span className="badge bg-primary rounded-pill fs-6">{count} Votes</span>
-              </li>
-            ))}
-          </ul>
-
-          {/* Winner or Tie Banner logic */}
-          {totalVotes === 0 ? (
-            <div className="alert alert-secondary text-center">
-              No votes cast yet in this database session.
-            </div>
-          ) : winners.length > 1 ? (
-            <div className="alert alert-warning text-center">
-              🤝 Election Result is a TIE
-            </div>
-          ) : (
-            <div className="alert alert-success text-center">
-              🏆 Winner: {winners[0]}
-            </div>
-          )}
-
-          {/* Anonymous IDs list */}
-          <h4 className="mt-4 mb-3">Anonymous Voter IDs (Audited)</h4>
-          <ul className="list-group">
-            {voters.length === 0 ? (
-              <li className="list-group-item text-muted text-center">No active logs saved locally.</li>
-            ) : (
-              voters.map((voter, index) => (
-                <li key={index} className="list-group-item font-monospace">
-                  🔑 {voter}
-                </li>
-              ))
-            )}
-          </ul>
+    <div className="container py-5">
+      <div className="card shadow p-4 mx-auto" style={{ maxWidth: '700px' }}>
+        <div className="text-center mb-4">
+          <h2 className="text-primary fw-bold">Live Election Standings</h2>
+          <p className="text-muted">Total Ballots Cast: <span className="fw-bold text-dark">{totalVotes}</span></p>
+          <button className="btn btn-sm btn-outline-secondary" onClick={fetchResults} disabled={loading}>
+            {loading ? 'Refreshing...' : '🔄 Force Refresh'}
+          </button>
         </div>
+
+        {error && (
+          <div className="alert alert-danger text-center" role="alert">
+            {error}
+          </div>
+        )}
+
+        <div className="vstack gap-4">
+          {/* PTI Results Bar */}
+          <div>
+            <div className="d-flex justify-content-between mb-1 fw-bold text-success">
+              <span>PTI</span>
+              <span>{results.PTI} Votes ({calculatePercentage(results.PTI)}%)</span>
+            </div>
+            <div className="progress" style={{ height: '25px' }}>
+              <div 
+                className="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                role="progressbar" 
+                style={{ width: `${calculatePercentage(results.PTI)}%` }}
+                aria-valuenow={results.PTI} 
+                aria-valuemin="0" 
+                aria-valuemax={totalVotes || 100}
+              ></div>
+            </div>
+          </div>
+
+          {/* PMLN Results Bar */}
+          <div>
+            <div className="d-flex justify-content-between mb-1 fw-bold text-primary">
+              <span>PMLN</span>
+              <span>{results.PMLN} Votes ({calculatePercentage(results.PMLN)}%)</span>
+            </div>
+            <div className="progress" style={{ height: '25px' }}>
+              <div 
+                className="progress-bar bg-primary progress-bar-striped progress-bar-animated" 
+                role="progressbar" 
+                style={{ width: `${calculatePercentage(results.PMLN)}%` }}
+                aria-valuenow={results.PMLN} 
+                aria-valuemin="0" 
+                aria-valuemax={totalVotes || 100}
+              ></div>
+            </div>
+          </div>
+
+          {/* Independent Results Bar */}
+          <div>
+            <div className="d-flex justify-content-between mb-1 fw-bold text-warning">
+              <span>Independent</span>
+              <span className="text-dark">{results.Independent} Votes ({calculatePercentage(results.Independent)}%)</span>
+            </div>
+            <div className="progress" style={{ height: '25px' }}>
+              <div 
+                className="progress-bar bg-warning progress-bar-striped progress-bar-animated" 
+                role="progressbar" 
+                style={{ width: `${calculatePercentage(results.Independent)}%` }}
+                aria-valuenow={results.Independent} 
+                aria-valuemin="0" 
+                aria-valuemax={totalVotes || 100}
+              ></div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );
-}
+};
 
 export default Result;
