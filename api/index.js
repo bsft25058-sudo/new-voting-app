@@ -9,10 +9,10 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://root:root@cluster0.mongodb.net/test?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
-    .then(() => console.log("Connected to MongoDB"))
+    .then(() => console.log("Connected"))
     .catch(err => console.error(err));
 
-// Defined with explicit collection names matching your database exactly
+// Standard schema configurations matching your database folders
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -55,7 +55,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// REQUIRED NEW CHECK: Tells the frontend if this user already voted
+// CHECK USER STATUS (This prevents the double voting trick)
 app.get('/api/user-status', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.query.username });
