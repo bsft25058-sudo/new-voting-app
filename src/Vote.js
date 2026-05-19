@@ -1,154 +1,60 @@
-import React from "react";
+import React, { useState } from 'react';
 
 function Vote({ timeLeft }) {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
-  const handleVote = (candidate) => {
+  const submitVote = async (candidateName) => {
+    setLoading(true);
+    setMessage('');
+    try {
+      const response = await fetch('http://localhost:5000/api/vote', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ candidate: candidateName }),
+      });
 
-    // Voting Ended
-    if (timeLeft <= 0) {
-
-      alert("Voting Time Ended");
-
-      return;
-
+      const data = await response.json();
+      if (data.success) {
+        setMessage(`Success: ${data.message}`);
+      } else {
+        setMessage(`Error: ${data.message || 'Something went wrong'}`);
+      }
+    } catch (error) {
+      setMessage('Failed to connect to the server.');
+    } finally {
+      setLoading(false);
     }
-
-    // Current User
-    const currentUser = JSON.parse(
-      localStorage.getItem("user")
-    );
-
-    // Already Voted Users
-    let votedUsers = JSON.parse(
-      localStorage.getItem("votedUsers")
-    ) || [];
-
-    // Check Duplicate Vote
-    if (
-      votedUsers.includes(currentUser.voterId)
-    ) {
-
-      alert("You already voted");
-
-      return;
-
-    }
-
-    // Votes Object
-    let votes = JSON.parse(
-      localStorage.getItem("votes")
-    ) || {
-
-      "PTI": 0,
-
-      "PML(N)": 0,
-
-      "IN-DEPENDENT": 0
-
-    };
-
-    // Add Vote
-    votes[candidate]++;
-
-    // Save Votes
-    localStorage.setItem(
-      "votes",
-      JSON.stringify(votes)
-    );
-
-    // Save Anonymous IDs
-    let voters = JSON.parse(
-      localStorage.getItem("voters")
-    ) || [];
-
-    voters.push(currentUser.voterId);
-
-    localStorage.setItem(
-      "voters",
-      JSON.stringify(voters)
-    );
-
-    // Save Voted User
-    votedUsers.push(currentUser.voterId);
-
-    localStorage.setItem(
-      "votedUsers",
-      JSON.stringify(votedUsers)
-    );
-
-    alert("Vote Submitted Successfully");
-
   };
 
+  // --- Keep your existing UI, just attach `submitVote("Candidate Name")` to your buttons ---
   return (
-
-    <div className="row justify-content-center">
-
-      <div className="col-md-8">
-
-        <div className="card vote-card shadow-lg p-4 text-center">
-
-          <h2 className="text-primary mb-4">
-
-            Cast Your Vote
-
-          </h2>
-
-          {/* Timer */}
-
-          <div className="timer-box mb-4">
-
-            ⏳ Time Left: {timeLeft}s
-
-          </div>
-
-          {/* Vote Buttons */}
-
-          <div className="d-grid gap-3">
-
-            <button
-              className="btn btn-success vote-btn"
-              onClick={() =>
-                handleVote("PTI")
-              }
-            >
-
-              Vote PTI
-
-            </button>
-
-            <button
-              className="btn btn-danger vote-btn"
-              onClick={() =>
-                handleVote("PML(N)")
-              }
-            >
-
-              Vote PML(N)
-
-            </button>
-
-            <button
-              className="btn btn-warning vote-btn"
-              onClick={() =>
-                handleVote("IN-DEPENDENT")
-              }
-            >
-
-              Vote IN-DEPENDENT
-
-            </button>
-
-          </div>
-
-        </div>
-
+    <div className="card p-4 text-center shadow-sm">
+      <h3>Time Remaining: {timeLeft}s</h3>
+      <p className="text-muted">Select a candidate below to cast your vote permanently.</p>
+      
+      {message && <div className="alert alert-info">{message}</div>}
+      
+      <div className="d-grid gap-3 mt-4">
+        <button 
+          className="btn btn-primary py-2" 
+          disabled={loading} 
+          onClick={() => submitVote('Candidate A')}
+        >
+          {loading ? 'Submitting...' : 'Vote for Candidate A'}
+        </button>
+        <button 
+          className="btn btn-success py-2" 
+          disabled={loading} 
+          onClick={() => submitVote('Candidate B')}
+        >
+          {loading ? 'Submitting...' : 'Vote for Candidate B'}
+        </button>
       </div>
-
     </div>
-
   );
-
 }
 
 export default Vote;
