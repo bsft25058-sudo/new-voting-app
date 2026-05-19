@@ -12,7 +12,6 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log("Connected"))
     .catch(err => console.error(err));
 
-// Explicit schema targets matching your existing Atlas collection names
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -55,7 +54,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// STATUS CHECK
+// CHECK VOTED STATUS (Blocks double voting across logins)
 app.get('/api/user-status', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.query.username });
@@ -65,12 +64,11 @@ app.get('/api/user-status', async (req, res) => {
     }
 });
 
-// VOTE SUBMISSION
+// SUBMIT VOTE
 app.post('/api/vote', async (req, res) => {
     try {
         const { username, candidate } = req.body;
-
-        if (!username) return res.status(400).json({ error: "User session lost! Please log in again." });
+        if (!username) return res.status(400).json({ error: "User identity error" });
 
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ error: "User not found" });
@@ -81,7 +79,9 @@ app.post('/api/vote', async (req, res) => {
         user.hasVoted = true;
         await user.save();
 
-        res.json({ success: true, message: "Vote cast successfully!", votingId: "VOTE-" + Math.random().toString(36).substring(2, 7).toUpperCase() });
+        // Generates the customized anonymous Identity Verification token receipt
+        const receiptToken = "BALLOT-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+        res.json({ success: true, message: "Vote cast successfully!", votingId: receiptToken });
     } catch (err) {
         res.status(500).json({ error: "Vote error" });
     }

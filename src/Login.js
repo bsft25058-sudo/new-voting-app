@@ -17,7 +17,7 @@ const Login = ({ onLoginSuccess }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMsg("Registered successfully! Now click Login.");
+      setMsg("Account created! You can now click Login.");
     } catch (err) {
       setError(err.message);
     }
@@ -33,8 +33,6 @@ const Login = ({ onLoginSuccess }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      
-      // Send username up to App.js
       onLoginSuccess(data.username);
     } catch (err) {
       setError(err.message);
@@ -42,21 +40,28 @@ const Login = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="container mt-5" style={{ maxWidth: '400px' }}>
-      <div className="card p-4 shadow">
-        <h3 className="text-center mb-4">E-Voting System</h3>
-        {error && <div className="alert alert-danger">{error}</div>}
-        {msg && <div className="alert alert-success">{msg}</div>}
-        <div className="mb-3">
-          <label>Username</label>
-          <input type="text" className="form-control" value={username} onChange={e => setUsername(e.target.value)} />
+    <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '70vh' }}>
+      <div className="card p-4 shadow-lg border-0 rounded-3" style={{ width: '100%', maxWidth: '400px' }}>
+        <div className="text-center mb-4">
+          <h2 className="text-primary fw-bold">E-Voting Portal</h2>
+          <p className="text-muted small">Secure & Anonymous Decentralized Ballot</p>
         </div>
+        
+        {error && <div className="alert alert-danger p-2 text-center small">{error}</div>}
+        {msg && <div className="alert alert-success p-2 text-center small">{msg}</div>}
+        
         <div className="mb-3">
-          <label>Password</label>
-          <input type="password" className="form-control" value={password} onChange={e => setPassword(e.target.value)} />
+          <label className="form-label fw-semibold text-secondary">Username</label>
+          <input type="text" className="form-control" placeholder="Enter username" value={username} onChange={e => setUsername(e.target.value)} />
         </div>
-        <button className="btn btn-primary w-100 mb-2" onClick={handleLogin}>Login</button>
-        <button className="btn btn-secondary w-100" onClick={handleRegister}>Register New Account</button>
+        
+        <div className="mb-4">
+          <label className="form-label fw-semibold text-secondary">Password</label>
+          <input type="password" className="form-control" placeholder="Enter password" value={password} onChange={e => setPassword(e.target.value)} />
+        </div>
+        
+        <button className="btn btn-primary w-100 py-2 mb-2 fw-bold" onClick={handleLogin}>Log In</button>
+        <button className="btn btn-outline-secondary w-100 py-2 fw-bold small" onClick={handleRegister}>Register New Account</button>
       </div>
     </div>
   );
