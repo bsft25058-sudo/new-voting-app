@@ -17,7 +17,7 @@ const Login = ({ onLoginSuccess }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMsg("Account created! You can now click Login.");
+      setMsg("Account created! You can now click Log In.");
     } catch (err) {
       setError(err.message);
     }
@@ -41,27 +41,27 @@ const Login = ({ onLoginSuccess }) => {
 
   return (
     <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '70vh' }}>
-      <div className="card p-4 shadow-lg border-0 rounded-3" style={{ width: '100%', maxWidth: '400px' }}>
+      <div className="card p-4 shadow border-0 rounded-3" style={{ width: '100%', maxWidth: '400px' }}>
         <div className="text-center mb-4">
           <h2 className="text-primary fw-bold">E-Voting Portal</h2>
-          <p className="text-muted small">Secure & Anonymous Decentralized Ballot</p>
+          <p className="text-muted small">Secure & Double-Ballot Protected System</p>
         </div>
         
         {error && <div className="alert alert-danger p-2 text-center small">{error}</div>}
         {msg && <div className="alert alert-success p-2 text-center small">{msg}</div>}
         
         <div className="mb-3">
-          <label className="form-label fw-semibold text-secondary">Username</label>
+          <label className="form-label small fw-bold text-secondary">Username</label>
           <input type="text" className="form-control" placeholder="Enter username" value={username} onChange={e => setUsername(e.target.value)} />
         </div>
         
         <div className="mb-4">
-          <label className="form-label fw-semibold text-secondary">Password</label>
+          <label className="form-label small fw-bold text-secondary">Password</label>
           <input type="password" className="form-control" placeholder="Enter password" value={password} onChange={e => setPassword(e.target.value)} />
         </div>
         
         <button className="btn btn-primary w-100 py-2 mb-2 fw-bold" onClick={handleLogin}>Log In</button>
-        <button className="btn btn-outline-secondary w-100 py-2 fw-bold small" onClick={handleRegister}>Register New Account</button>
+        <button className="btn btn-outline-secondary w-100 py-2 fw-bold small" onClick={handleRegister}>Create Account</button>
       </div>
     </div>
   );

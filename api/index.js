@@ -6,10 +6,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://root:root@cluster0.mongodb.net/test?retryWrites=true&w=majority";
+// Pulls your cleaned connection string from Vercel environment variables
+const MONGO_URI = process.env.MONGO_URI;
 
-mongoose.connect(MONGO_URI)
-    .then(() => console.log("Connected"))
+// Explicitly sets dbName to 'test' to target your collections directly
+mongoose.connect(MONGO_URI, { dbName: 'test' })
+    .then(() => console.log("Connected to MongoDB"))
     .catch(err => console.error(err));
 
 const userSchema = new mongoose.Schema({
@@ -27,7 +29,7 @@ const voteCountSchema = new mongoose.Schema({
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 const VoteCount = mongoose.models.VoteCount || mongoose.model('VoteCount', voteCountSchema);
 
-// REGISTER
+// REGISTER ENDPOINT
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -42,7 +44,7 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// LOGIN
+// LOGIN ENDPOINT
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -54,7 +56,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// CHECK VOTED STATUS (Blocks double voting across logins)
+// SYNC CHECK ENDPOINT (Blocks multi-login cheating)
 app.get('/api/user-status', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.query.username });
@@ -64,30 +66,31 @@ app.get('/api/user-status', async (req, res) => {
     }
 });
 
-// SUBMIT VOTE
+// SUBMIT BALLET VOTE ENDPOINT
 app.post('/api/vote', async (req, res) => {
     try {
         const { username, candidate } = req.body;
-        if (!username) return res.status(400).json({ error: "User identity error" });
+        if (!username) return res.status(400).json({ error: "User identity lost" });
 
         const user = await User.findOne({ username });
         if (!user) return res.status(404).json({ error: "User not found" });
         if (user.hasVoted) return res.status(400).json({ error: "You already voted!" });
 
+        // Increment the candidate score inside votecounts
         await VoteCount.findOneAndUpdate({}, { $inc: { [candidate]: 1 } }, { upsert: true });
         
         user.hasVoted = true;
         await user.save();
 
-        // Generates the customized anonymous Identity Verification token receipt
+        // Generate anonymous structural verification string token 
         const receiptToken = "BALLOT-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-        res.json({ success: true, message: "Vote cast successfully!", votingId: receiptToken });
+        res.json({ success: true, votingId: receiptToken });
     } catch (err) {
         res.status(500).json({ error: "Vote error" });
     }
 });
 
-// GET RESULTS
+// FETCH CURRENT STATS ENDPOINT
 app.get('/api/result', async (req, res) => {
     try {
         const counts = await VoteCount.findOne({});
