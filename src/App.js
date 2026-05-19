@@ -20,7 +20,7 @@ function App() {
   // GLOBAL TIMER
   // =========================
 
-  const [timeLeft, setTimeLeft] = useState(300);
+  const [timeLeft, setTimeLeft] = useState(1800);
 
   useEffect(() => {
 
