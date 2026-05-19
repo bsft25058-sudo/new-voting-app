@@ -40,11 +40,9 @@ function Login({ setUser }) {
       try {
 
         const response = await fetch(
-          "http://localhost:5000/login",
-          {
-
-            method: "POST",
-
+  "/api/login",
+  {
+    method: "POST",
             headers: {
 
               "Content-Type": "application/json"
@@ -109,7 +107,8 @@ function Login({ setUser }) {
           Math.floor(Math.random() * 10000);
 
         const response = await fetch(
-          "http://localhost:5000/register",
+  "/api/register",
+  
           {
 
             method: "POST",

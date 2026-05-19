@@ -12,12 +12,14 @@ app.use(express.json());
 app.use(cors()); 
 
 
-const MONGO_URI = 'mongodb+srv://TaimoorShahid:taimoor2007@online-voting-system.qi2aavk.mongodb.net/?appName=online-voting-system';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://TaimoorShahid:taimoor2007@online-voting.system.mongodb.net/?retryWrites=true&w=majority';
 
-mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 5000, 
-  socketTimeoutMS: 45000,        
-});
+mongoose.connect(MONGO_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+})
+.then(() => console.log("MongoDB Connected Successfully!"))
+.catch((err) => console.error("MongoDB Connection Error:", err));
 // ==========================================
 // 3. DATABASE SCHEMA & MODEL
 // ==========================================
