@@ -14,10 +14,10 @@ app.use(cors());
 
 const MONGO_URI = 'mongodb+srv://TaimoorShahid:taimoor2007@online-voting-system.qi2aavk.mongodb.net/?appName=online-voting-system';
 
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('MongoDB Connected to Cloud Atlas Successfully!'))
-    .catch(err => console.error('Database Connection Error:', err));
-
+mongoose.connect(process.env.MONGO_URI, {
+  serverSelectionTimeoutMS: 5000, 
+  socketTimeoutMS: 45000,        
+});
 // ==========================================
 // 3. DATABASE SCHEMA & MODEL
 // ==========================================

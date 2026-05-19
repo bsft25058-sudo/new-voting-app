@@ -38,20 +38,29 @@ function Vote({ timeLeft }) {
       {message && <div className="alert alert-info">{message}</div>}
       
       <div className="d-grid gap-3 mt-4">
-        <button 
-          className="btn btn-primary py-2" 
-          disabled={loading} 
-          onClick={() => submitVote('Candidate A')}
-        >
-          {loading ? 'Submitting...' : 'Vote for Candidate A'}
-        </button>
-        <button 
-          className="btn btn-success py-2" 
-          disabled={loading} 
-          onClick={() => submitVote('Candidate B')}
-        >
-          {loading ? 'Submitting...' : 'Vote for Candidate B'}
-        </button>
+        <button
+  className="btn btn-primary py-2 w-100 mb-2"
+  disabled={loading}
+  onClick={() => submitVote('PTI')}
+>
+  {loading ? 'Submitting...' : 'Vote for PTI'}
+</button>
+
+<button
+  className="btn btn-success py-2 w-100 mb-2"
+  disabled={loading}
+  onClick={() => submitVote('PMLN')}
+>
+  {loading ? 'Submitting...' : 'Vote for PMLN'}
+</button>
+
+<button
+  className="btn btn-warning text-white py-2 w-100"
+  disabled={loading}
+  onClick={() => submitVote('Independent')}
+>
+  {loading ? 'Submitting...' : 'Vote for Independent'}
+</button>
       </div>
     </div>
   );
