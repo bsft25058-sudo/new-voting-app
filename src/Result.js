@@ -6,7 +6,7 @@ const Result = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch real-time election results from our new unified api endpoint
+  
   const fetchResults = async () => {
     try {
       setLoading(true);
@@ -29,12 +29,12 @@ const Result = () => {
 
   useEffect(() => {
     fetchResults();
-    // Optional: Refresh results automatically every 10 seconds to keep it live
+   
     const interval = setInterval(fetchResults, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  // Calculate totals and percentages safely to avoid division by zero errors
+  
   const totalVotes = results.PTI + results.PMLN + results.Independent;
   const calculatePercentage = (votes) => {
     if (totalVotes === 0) return 0;
@@ -59,7 +59,7 @@ const Result = () => {
         )}
 
         <div className="vstack gap-4">
-          {/* PTI Results Bar */}
+          
           <div>
             <div className="d-flex justify-content-between mb-1 fw-bold text-success">
               <span>PTI</span>
@@ -77,7 +77,7 @@ const Result = () => {
             </div>
           </div>
 
-          {/* PMLN Results Bar */}
+        
           <div>
             <div className="d-flex justify-content-between mb-1 fw-bold text-primary">
               <span>PMLN</span>
@@ -95,7 +95,7 @@ const Result = () => {
             </div>
           </div>
 
-          {/* Independent Results Bar */}
+          
           <div>
             <div className="d-flex justify-content-between mb-1 fw-bold text-warning">
               <span>Independent</span>

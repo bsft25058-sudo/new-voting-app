@@ -6,13 +6,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Pulls your cleaned connection string from Vercel environment variables
 const MONGO_URI = process.env.MONGO_URI;
 
-// Explicitly sets dbName to 'test' to target your collections directly
 mongoose.connect(MONGO_URI, { dbName: 'test' })
     .then(() => console.log("Connected to MongoDB"))
     .catch(err => console.error(err));
+
+// ==========================================
+// 1. SCHEMAS (Your old schemas + new timer schema)
+// ==========================================
 
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
@@ -26,10 +28,20 @@ const voteCountSchema = new mongoose.Schema({
     Independent: { type: Number, default: 0 }
 }, { collection: 'votecounts' });
 
+// NEW TIMER SCHEMA: Keeps the deadline safe in MongoDB
+const timerSchema = new mongoose.Schema({
+    expiresAt: { type: Date, required: true }
+}, { collection: 'timer' });
+
 const User = mongoose.models.User || mongoose.model('User', userSchema);
 const VoteCount = mongoose.models.VoteCount || mongoose.model('VoteCount', voteCountSchema);
+const Timer = mongoose.models.Timer || mongoose.model('Timer', timerSchema);
 
-// REGISTER ENDPOINT
+
+// ==========================================
+// 2. AUTHENTICATION APIS (Kept exactly the same)
+// ==========================================
+
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -44,7 +56,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// LOGIN ENDPOINT
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -56,7 +67,6 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-// SYNC CHECK ENDPOINT (Blocks multi-login cheating)
 app.get('/api/user-status', async (req, res) => {
     try {
         const user = await User.findOne({ username: req.query.username });
@@ -66,7 +76,11 @@ app.get('/api/user-status', async (req, res) => {
     }
 });
 
-// SUBMIT BALLET VOTE ENDPOINT
+
+// ==========================================
+// 3. VOTING APIS (Kept exactly the same)
+// ==========================================
+
 app.post('/api/vote', async (req, res) => {
     try {
         const { username, candidate } = req.body;
@@ -76,13 +90,11 @@ app.post('/api/vote', async (req, res) => {
         if (!user) return res.status(404).json({ error: "User not found" });
         if (user.hasVoted) return res.status(400).json({ error: "You already voted!" });
 
-        // Increment the candidate score inside votecounts
         await VoteCount.findOneAndUpdate({}, { $inc: { [candidate]: 1 } }, { upsert: true });
         
         user.hasVoted = true;
         await user.save();
 
-        // Generate anonymous structural verification string token 
         const receiptToken = "BALLOT-" + Math.random().toString(36).substring(2, 7).toUpperCase();
         res.json({ success: true, votingId: receiptToken });
     } catch (err) {
@@ -90,13 +102,52 @@ app.post('/api/vote', async (req, res) => {
     }
 });
 
-// FETCH CURRENT STATS ENDPOINT
 app.get('/api/result', async (req, res) => {
     try {
         const counts = await VoteCount.findOne({});
         res.json(counts || { PTI: 0, PMLN: 0, Independent: 0 });
     } catch (err) {
         res.status(500).json({ error: "Result error" });
+    }
+});
+
+
+// ==========================================
+// 4. NEW CENTRALIZED TIMER APIS
+// ==========================================
+
+// Route to GET the active timer deadline (Both laptop and mobile read this)
+app.get('/api/timer', async (req, res) => {
+    try {
+        let timer = await Timer.findOne({});
+        // If no timer exists in the DB yet, create an initial 10-minute one
+        if (!timer) {
+            const initialExpiry = new Date(Date.now() + 10 * 60000);
+            timer = new Timer({ expiresAt: initialExpiry });
+            await timer.save();
+        }
+        res.json({ expiresAt: timer.expiresAt });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch timer" });
+    }
+});
+
+// ADMIN RESET ROUTE (When clicked on your laptop, updates MongoDB)
+app.post('/api/timer/reset', async (req, res) => {
+    try {
+        const durationMinutes = req.body.durationMinutes || 10;
+        const newExpiresAt = new Date(Date.now() + durationMinutes * 60000);
+
+        // Updates the single time tracking row in MongoDB, or creates it if missing
+        const updatedTimer = await Timer.findOneAndUpdate(
+            {}, 
+            { expiresAt: newExpiresAt }, 
+            { new: true, upsert: true }
+        );
+
+        res.json({ message: 'Timer restarted successfully!', expiresAt: updatedTimer.expiresAt });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to reset timer" });
     }
 });
 

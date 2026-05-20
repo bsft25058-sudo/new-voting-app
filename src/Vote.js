@@ -8,44 +8,61 @@ const Vote = ({ username }) => {
   const [successMessage, setSuccessMessage] = useState(null);
   const [anonymousId, setAnonymousId] = useState("");
 
-  // 1. GLOBAL SHARED TIMER LOGIC (Using Unix Timestamp Window)
-  const [timeLeft, setTimeLeft] = useState(() => {
-    const savedExpiry = localStorage.getItem('global_voting_expiry');
-    const now = Math.floor(Date.now() / 1000);
+  // New Database-Driven Timer tracking states
+  const [timeLeft, setTimeLeft] = useState(null); 
+  const [expiresAt, setExpiresAt] = useState(null);
 
-    if (savedExpiry) {
-      const remaining = parseInt(savedExpiry, 10) - now;
-      return remaining > 0 ? remaining : 0;
-    } else {
-      const newExpiry = now + 300; // Hardcoded 5-Minute Single Voting Session
-      localStorage.setItem('global_voting_expiry', newExpiry.toString());
-      return 300;
+  // 1. Fetch current timer parameters and active results from MongoDB
+  const fetchGlobalData = async () => {
+    try {
+      // Pull universal clock target from backend
+      const timerRes = await fetch('/api/timer');
+      if (timerRes.ok) {
+        const timerData = await timerRes.json();
+        setExpiresAt(timerData.expiresAt);
+      }
+
+      // Keep candidate data arrays fresh
+      const resRes = await fetch('/api/result');
+      const resData = await resRes.json();
+      setResults(resData);
+    } catch (err) {
+      console.error("Synchronization background failure:", err);
     }
-  });
+  };
 
-  useEffect(() => {
-    if (timeLeft <= 0) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          return 0;
-        }
-        return prev - 1;
+  // 2. Administrative Action to trigger clock refresh across all client devices
+  const handleAdminReset = async () => {
+    try {
+      setError(null);
+      const response = await fetch('/api/timer/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ durationMinutes: 10 }), // Updates database to 10 fresh minutes
       });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [timeLeft]);
+      const data = await response.json();
+      
+      if (!response.ok) throw new Error(data.error);
+      
+      setExpiresAt(data.expiresAt); // Shift laptop display instantly
+      setSuccessMessage("Global cluster timer updated! Refreshing connected devices...");
+    } catch (err) {
+      setError("Admin Control Override Failure: " + err.message);
+    }
+  };
 
-  // 2. RUNS LIVE MONGODB VALIDATION TO BLOCK LOG-IN CHEATING
+  // Run on initial mounting, and fetch from server every 5 seconds to catch live administrative resets
+  useEffect(() => {
+    fetchGlobalData();
+    const syncInterval = setInterval(fetchGlobalData, 5000);
+    return () => clearInterval(syncInterval);
+  }, []);
+
+  // Check login instance permissions on boot
   useEffect(() => {
     const checkUserStatus = async () => {
       if (!username) return;
       try {
-        const resRes = await fetch('/api/result');
-        const resData = await resRes.json();
-        setResults(resData);
-
         const statusRes = await fetch(`/api/user-status?username=${username}`);
         const statusData = await statusRes.json();
         if (statusData.hasVoted) {
@@ -58,6 +75,27 @@ const Vote = ({ username }) => {
     };
     checkUserStatus();
   }, [username]);
+
+  // 3. Real-Time Precision Countdown Subloop
+  useEffect(() => {
+    if (!expiresAt) return;
+
+    const runCountdown = () => {
+      const targetTime = new Date(expiresAt).getTime();
+      const currentTime = new Date().getTime();
+      const difference = Math.floor((targetTime - currentTime) / 1000);
+
+      if (difference <= 0) {
+        setTimeLeft(0);
+      } else {
+        setTimeLeft(difference);
+      }
+    };
+
+    runCountdown(); // Run instantly to clear out loading states
+    const timer = setInterval(runCountdown, 1000);
+    return () => clearInterval(timer);
+  }, [expiresAt]);
 
   const handleVote = async (candidate) => {
     if (timeLeft === 0) {
@@ -76,7 +114,7 @@ const Vote = ({ username }) => {
       if (!response.ok) throw new Error(data.error);
 
       setHasVoted(true);
-      setAnonymousId(data.votingId); // Sets individual receipt proof ID
+      setAnonymousId(data.votingId); 
       setSuccessMessage("Vote submitted securely!");
 
       const resRes = await fetch('/api/result');
@@ -92,13 +130,14 @@ const Vote = ({ username }) => {
   };
 
   const formatTime = (seconds) => {
+    if (seconds === null) return "Loading...";
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
   return (
-    <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '80vh' }}>
+    <div className="container d-flex flex-column justify-content-center align-items-center" style={{ minHeight: '90vh' }}>
       <div className="card p-4 shadow-lg border-0 rounded-3" style={{ width: '100%', maxWidth: '500px' }}>
         
         <div className="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
@@ -114,7 +153,6 @@ const Vote = ({ username }) => {
         {error && <div className="alert alert-danger text-center small p-2 fw-semibold">{error}</div>}
         {successMessage && <div className="alert alert-success text-center small p-2 fw-semibold">{successMessage}</div>}
         
-        {/* 4. SHOW UNIQUE GENERATED IDENTITY CODE */}
         {anonymousId && (
           <div className="alert alert-light border border-info text-center font-monospace small mb-3">
             <strong>Ballot Receipt Reference ID:</strong> <br/> {anonymousId}
@@ -122,21 +160,29 @@ const Vote = ({ username }) => {
         )}
 
         <div className="mt-3">
-          {/* PTI BUTTON */}
-          <button className="btn btn-outline-success w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" disabled={timeLeft === 0 || hasVoted} onClick={() => handleVote('PTI')}>
+          <button 
+            className="btn btn-outline-success w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
+            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
+            onClick={() => handleVote('PTI')}
+          >
             <span>🏏 Vote for PTI</span>
-            {/* 3. CONDITIONAL VISIBILITY: Hides numbers until timer hits zero */}
             {timeLeft === 0 && <span className="badge bg-success fs-6 font-monospace">{results.PTI} Votes</span>}
           </button>
 
-          {/* PMLN BUTTON */}
-          <button className="btn btn-outline-primary w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" disabled={timeLeft === 0 || hasVoted} onClick={() => handleVote('PMLN')}>
+          <button 
+            className="btn btn-outline-primary w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
+            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
+            onClick={() => handleVote('PMLN')}
+          >
             <span>🦁 Vote for PMLN</span>
             {timeLeft === 0 && <span className="badge bg-primary fs-6 font-monospace">{results.PMLN} Votes</span>}
           </button>
-
-          {/* INDEPENDENT BUTTON */}
-          <button className="btn btn-outline-warning text-dark w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" disabled={timeLeft === 0 || hasVoted} onClick={() => handleVote('Independent')}>
+          
+          <button 
+            className="btn btn-outline-warning text-dark w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
+            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
+            onClick={() => handleVote('Independent')}
+          >
             <span>📢 Vote for Independent</span>
             {timeLeft === 0 && <span className="badge bg-warning text-dark fs-6 font-monospace">{results.Independent} Votes</span>}
           </button>
@@ -149,6 +195,21 @@ const Vote = ({ username }) => {
         )}
 
         <button className="btn btn-danger w-100 mt-4 py-2 fw-semibold" onClick={handleLogout}>Log Out</button>
+      </div>
+
+      {/* MASTER CENTRALIZED RESET MODULE FOR DEMONSTRATION CONTROL */}
+      <div className="mt-4 p-3 bg-light rounded shadow-sm text-center border" style={{ width: '100%', maxWidth: '500px' }}>
+        <p className="text-muted small mb-2 fw-semibold">⚙️ Presentation Administration Panel</p>
+        <button 
+          onClick={handleAdminReset} 
+          className="btn btn-sm btn-dark px-4 fw-bold border-0"
+          style={{ backgroundColor: '#1a1a2e' }}
+        >
+          🔄 Synchronize & Reset New 10-Min Timer
+        </button>
+        <div className="text-muted text-center mt-2" style={{ fontSize: '10px' }}>
+          Clicking this updates MongoDB instantly. All connected laptop or mobile phone clients will auto-sync within 5 seconds.
+        </div>
       </div>
     </div>
   );
