@@ -12,9 +12,7 @@ mongoose.connect(MONGO_URI, { dbName: 'test' })
     .then(() => console.log("Connected to MongoDB"))
     .catch(err => console.error(err));
 
-// ==========================================
-// 1. SCHEMAS (Your old schemas + new timer schema)
-// ==========================================
+
 
 const userSchema = new mongoose.Schema({
     username: { type: String, required: true, unique: true },
@@ -28,7 +26,7 @@ const voteCountSchema = new mongoose.Schema({
     Independent: { type: Number, default: 0 }
 }, { collection: 'votecounts' });
 
-// NEW TIMER SCHEMA: Keeps the deadline safe in MongoDB
+
 const timerSchema = new mongoose.Schema({
     expiresAt: { type: Date, required: true }
 }, { collection: 'timer' });
@@ -38,9 +36,7 @@ const VoteCount = mongoose.models.VoteCount || mongoose.model('VoteCount', voteC
 const Timer = mongoose.models.Timer || mongoose.model('Timer', timerSchema);
 
 
-// ==========================================
-// 2. AUTHENTICATION APIS (Kept exactly the same)
-// ==========================================
+
 
 app.post('/api/register', async (req, res) => {
     try {
@@ -77,9 +73,6 @@ app.get('/api/user-status', async (req, res) => {
 });
 
 
-// ==========================================
-// 3. VOTING APIS (Kept exactly the same)
-// ==========================================
 
 app.post('/api/vote', async (req, res) => {
     try {
@@ -112,15 +105,13 @@ app.get('/api/result', async (req, res) => {
 });
 
 
-// ==========================================
-// 4. NEW CENTRALIZED TIMER APIS
-// ==========================================
 
-// Route to GET the active timer deadline (Both laptop and mobile read this)
+
+
 app.get('/api/timer', async (req, res) => {
     try {
         let timer = await Timer.findOne({});
-        // If no timer exists in the DB yet, create an initial 10-minute one
+      
         if (!timer) {
             const initialExpiry = new Date(Date.now() + 10 * 60000);
             timer = new Timer({ expiresAt: initialExpiry });
@@ -132,13 +123,13 @@ app.get('/api/timer', async (req, res) => {
     }
 });
 
-// ADMIN RESET ROUTE (When clicked on your laptop, updates MongoDB)
+
 app.post('/api/timer/reset', async (req, res) => {
     try {
         const durationMinutes = req.body.durationMinutes || 10;
         const newExpiresAt = new Date(Date.now() + durationMinutes * 60000);
 
-        // Updates the single time tracking row in MongoDB, or creates it if missing
+      
         const updatedTimer = await Timer.findOneAndUpdate(
             {}, 
             { expiresAt: newExpiresAt }, 
