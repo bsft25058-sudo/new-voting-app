@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const Vote = () => {
+    // Session backup fallback
     const username = localStorage.getItem("username") || "Guest";
     
     const [timeLeft, setTimeLeft] = useState("");
@@ -86,7 +87,7 @@ const Vote = () => {
         setSuccessMessage("");
 
         if (username === "Guest") {
-            setErrorMessage("You are logged in as a Guest. Please sign out and log into a registered account to cast a vote.");
+            setErrorMessage("You are logged in as a Guest. Sign out and login to vote.");
             return;
         }
 
