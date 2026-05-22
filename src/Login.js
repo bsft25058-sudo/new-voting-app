@@ -1,70 +1,61 @@
 import React, { useState } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
 
-const Login = ({ onLoginSuccess }) => {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [msg, setMsg] = useState("");
+const Login = () => {
+    const [username, setUsername] = useState("");
+    const [password, setPassword] = useState("");
+    const [message, setMessage] = useState("");
 
-  const handleRegister = async () => {
-    setError(""); setMsg("");
-    try {
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setMsg("Account created! You can now click Log In.");
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+    const API_URL = "https://new-voting-app-jade.vercel.app/api";
 
-  const handleLogin = async () => {
-    setError(""); setMsg("");
-    try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      onLoginSuccess(data.username);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${API_URL}/login`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await res.json();
 
-  return (
-    <div className="container d-flex justify-content-center align-items-center" style={{ minHeight: '70vh' }}>
-      <div className="card p-4 shadow border-0 rounded-3" style={{ width: '100%', maxWidth: '400px' }}>
-        <div className="text-center mb-4">
-          <h2 className="text-primary fw-bold">E-Voting Portal</h2>
-          <p className="text-muted small">Secure & Double-Ballot Protected System</p>
+            if (data.success) {
+                // THE ONLY REQUIRED CHANGE: This saves your name so you aren't a Guest!
+                localStorage.setItem("username", data.username);
+                
+                // Redirects back to your voting screen
+                window.location.href = "/vote"; 
+            } else {
+                setMessage(data.error || "Invalid credentials");
+            }
+        } catch (err) {
+            setMessage("Login error occurred.");
+        }
+    };
+
+    return (
+        <div style={{ padding: "20px", maxWidth: "400px", margin: "0 auto" }}>
+            <h2>Login</h2>
+            {message && <p style={{ color: "red" }}>{message}</p>}
+            <form onSubmit={handleLogin}>
+                <input 
+                    type="text" 
+                    placeholder="Username" 
+                    value={username} 
+                    onChange={(e) => setUsername(e.target.value)} 
+                    style={{ display: "block", width: "100%", marginBottom: "10px", padding: "8px" }}
+                />
+                <input 
+                    type="password" 
+                    placeholder="Password" 
+                    value={password} 
+                    onChange={(e) => setPassword(e.target.value)} 
+                    style={{ display: "block", width: "100%", marginBottom: "10px", padding: "8px" }}
+                />
+                <button type="submit" style={{ padding: "10px 20px", backgroundColor: "#007bff", color: "white", border: "none", cursor: "pointer" }}>
+                    Log In
+                </button>
+            </form>
         </div>
-        
-        {error && <div className="alert alert-danger p-2 text-center small">{error}</div>}
-        {msg && <div className="alert alert-success p-2 text-center small">{msg}</div>}
-        
-        <div className="mb-3">
-          <label className="form-label small fw-bold text-secondary">Username</label>
-          <input type="text" className="form-control" placeholder="Enter username" value={username} onChange={e => setUsername(e.target.value)} />
-        </div>
-        
-        <div className="mb-4">
-          <label className="form-label small fw-bold text-secondary">Password</label>
-          <input type="password" className="form-control" placeholder="Enter password" value={password} onChange={e => setPassword(e.target.value)} />
-        </div>
-        
-        <button className="btn btn-primary w-100 py-2 mb-2 fw-bold" onClick={handleLogin}>Log In</button>
-        <button className="btn btn-outline-secondary w-100 py-2 fw-bold small" onClick={handleRegister}>Create Account</button>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default Login;
