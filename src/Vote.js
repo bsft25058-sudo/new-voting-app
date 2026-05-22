@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const Vote = () => {
-    // 1. Get current logged-in user details from browser storage
     const username = localStorage.getItem("username") || "Guest";
     
-    // 2. State management for timer, voting status, and results
     const [timeLeft, setTimeLeft] = useState("");
     const [isTimerExpired, setIsTimerExpired] = useState(false);
     const [hasVoted, setHasVoted] = useState(false);
@@ -13,13 +11,9 @@ const Vote = () => {
     const [errorMessage, setErrorMessage] = useState("");
     const [successMessage, setSuccessMessage] = useState("");
 
-    // Backend Base API URL
     const API_URL = "https://new-voting-app-jade.vercel.app/api";
-    
-    // Reference pointer to keep track of the changing target expiration time
     const targetTimeRef = useRef(null);
 
-    // 3. Helper function to check if this user has already voted
     const checkUserVotingStatus = useCallback(async () => {
         try {
             const res = await fetch(`${API_URL}/user-status?username=${encodeURIComponent(username)}`);
@@ -32,7 +26,6 @@ const Vote = () => {
         }
     }, [username, API_URL]);
 
-    // 4. Helper function to fetch final vote tallies from MongoDB Atlas
     const fetchElectionResults = useCallback(async () => {
         try {
             const res = await fetch(`${API_URL}/result`);
@@ -43,7 +36,7 @@ const Vote = () => {
         }
     }, [API_URL]);
 
-    // 5. Network Sync Effect: Fetches the authoritative timer from the backend every 5 seconds
+    // Authoritative background synchronization with backend (every 5 seconds)
     useEffect(() => {
         checkUserVotingStatus();
 
@@ -65,7 +58,7 @@ const Vote = () => {
         return () => clearInterval(syncInterval);
     }, [checkUserVotingStatus, API_URL]);
 
-    // 6. Smooth Local Render Effect: Forces the clock display to update fluidly every single second (1000ms)
+    // High-precision smooth 1-second interval clock update 
     useEffect(() => {
         const updateClockDisplay = () => {
             if (!targetTimeRef.current) return;
@@ -76,7 +69,7 @@ const Vote = () => {
             if (difference <= 0) {
                 setTimeLeft("Voting Ended");
                 setIsTimerExpired(true);
-                fetchElectionResults(); // Instantly show scoreboard when clock hits zero
+                fetchElectionResults();
             } else {
                 setIsTimerExpired(false);
                 const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
@@ -89,7 +82,6 @@ const Vote = () => {
         return () => clearInterval(localClockInterval);
     }, [fetchElectionResults]);
 
-    // 7. Function to handle casting a vote
     const castVote = async (candidateName) => {
         setErrorMessage("");
         setSuccessMessage("");
@@ -114,7 +106,7 @@ const Vote = () => {
 
             if (data.success) {
                 setHasVoted(true);
-                setReceiptCode(data.votingId); // Save anonymous receipt token
+                setReceiptCode(data.votingId);
                 setSuccessMessage(`Vote cast successfully for ${candidateName}!`);
                 if (isTimerExpired) fetchElectionResults();
             }
@@ -123,7 +115,6 @@ const Vote = () => {
         }
     };
 
-    // 8. Administration Panel Reset Action
     const handleResetTimer = async () => {
         setErrorMessage("");
         setSuccessMessage("");
@@ -131,13 +122,13 @@ const Vote = () => {
             const res = await fetch(`${API_URL}/timer/reset`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ durationMinutes: 5 }) // Re-initializes a clean 5-minute database slot
+                body: JSON.stringify({ durationMinutes: 5 })
             });
-            const data = await res.json();
             if (res.ok) {
                 alert("Master clock successfully set to 5 Minutes across all devices!");
                 window.location.reload(); 
             } else {
+                const data = await res.json();
                 setErrorMessage(data.error || "Reset failed");
             }
         } catch (err) {
@@ -145,16 +136,14 @@ const Vote = () => {
         }
     };
 
-    // 9. Log out action
     const handleLogout = () => {
         localStorage.removeItem("username");
-        window.location.href = "/"; // Send back to login screen
+        window.location.href = "/";
     };
 
     return (
         <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'Arial, sans-serif', border: '1px solid #ddd', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
             
-            {/* Header section */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
                 <div>
                     <h2 style={{ margin: 0, color: '#2c3e50' }}>Secure Voting Portal</h2>
@@ -163,24 +152,20 @@ const Vote = () => {
                 <button onClick={handleLogout} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
             </div>
 
-            {/* Error & Success Alert Notification Banners */}
             {errorMessage && <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMessage}</div>}
             {successMessage && <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold' }}>{successMessage}</div>}
 
-            {/* Live Synchronized Countdown Clock */}
             <div style={{ backgroundColor: '#34495e', color: 'white', padding: '15px', borderRadius: '8px', textAlign: 'center', marginBottom: '25px' }}>
                 <h4 style={{ margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px', color: '#bdc3c7' }}>Time Remaining for Election</h4>
                 <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'monospace' }}>{timeLeft || "Syncing..."}</div>
             </div>
 
-            {/* MAIN INTERACTIVE BODY AREA */}
             {!isTimerExpired ? (
                 <div>
                     {!hasVoted ? (
                         <div>
                             <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#34495e' }}>Cast Your Electronic Ballot</h3>
                             
-                            {/* Candidate Voting Buttons with Custom Electoral Symbols */}
                             <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
                                 <span style={{ fontSize: '22px' }}>🏏</span> Vote for PTI
                             </button>
@@ -207,9 +192,8 @@ const Vote = () => {
                     )}
                 </div>
             ) : (
-                /* LIVE RESULTS SECTION (Unlocks with Party Symbols when timer finishes) */
                 <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0' }}>
+                    <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
                         📊 Final Election Scoreboard
                     </h3>
                     <div style={{ margin: '15px 0' }}>
@@ -235,7 +219,6 @@ const Vote = () => {
                 </div>
             )}
 
-            {/* SECURITY GUARD FOR THE TIMER CONTROL PANEL */}
             {username === "taimoor_admin" && (
                 <div style={{ backgroundColor: '#fdf6e2', padding: '20px', borderRadius: '10px', marginTop: '35px', textAlign: 'center', border: '1px dashed #e67e22' }}>
                     <h3 style={{ color: '#e67e22', margin: '0 0 5px 0', fontSize: '16px' }}>👑 Presentation Administration Panel</h3>
