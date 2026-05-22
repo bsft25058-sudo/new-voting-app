@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 const Vote = () => {
     // 1. Get current logged-in user details from browser storage
@@ -15,6 +15,9 @@ const Vote = () => {
 
     // Backend Base API URL
     const API_URL = "https://new-voting-app-jade.vercel.app/api";
+    
+    // Reference pointer to keep track of the changing target expiration time
+    const targetTimeRef = useRef(null);
 
     // 3. Helper function to check if this user has already voted
     const checkUserVotingStatus = useCallback(async () => {
@@ -40,44 +43,53 @@ const Vote = () => {
         }
     }, [API_URL]);
 
-    // 5. Live Effect: Keeps the timer perfectly synced with the backend cloud timestamp
+    // 5. Network Sync Effect: Fetches the authoritative timer from the backend every 5 seconds
     useEffect(() => {
         checkUserVotingStatus();
 
-        const calculateTime = async () => {
+        const syncTimerWithBackend = async () => {
             try {
                 const res = await fetch(`${API_URL}/timer`);
                 const data = await res.json();
-                
-                if (!data.expiresAt) return;
-
-                const targetTime = new Date(data.expiresAt).getTime();
-                const now = new Date().getTime();
-                const difference = targetTime - now;
-
-                if (difference <= 0) {
-                    setTimeLeft("Voting Ended");
-                    setIsTimerExpired(true);
-                    fetchElectionResults(); // Instantly show results when clock hits 0
-                } else {
-                    setIsTimerExpired(false);
-                    const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-                    const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-                    setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+                if (data.expiresAt) {
+                    targetTimeRef.current = new Date(data.expiresAt).getTime();
                 }
             } catch (err) {
                 console.error("Failed to sync timer with backend:", err);
             }
         };
 
-        // Run immediately on mount, then update every 5 seconds to minimize network clutter
-        calculateTime();
-        const timerInterval = setInterval(calculateTime, 5000);
+        syncTimerWithBackend();
+        const syncInterval = setInterval(syncTimerWithBackend, 5000);
 
-        return () => clearInterval(timerInterval);
-    }, [checkUserVotingStatus, fetchElectionResults, API_URL]);
+        return () => clearInterval(syncInterval);
+    }, [checkUserVotingStatus, API_URL]);
 
-    // 6. Function to handle casting a vote
+    // 6. Smooth Local Render Effect: Forces the clock display to update fluidly every single second (1000ms)
+    useEffect(() => {
+        const updateClockDisplay = () => {
+            if (!targetTimeRef.current) return;
+
+            const now = new Date().getTime();
+            const difference = targetTimeRef.current - now;
+
+            if (difference <= 0) {
+                setTimeLeft("Voting Ended");
+                setIsTimerExpired(true);
+                fetchElectionResults(); // Instantly show scoreboard when clock hits zero
+            } else {
+                setIsTimerExpired(false);
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+                setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+            }
+        };
+
+        const localClockInterval = setInterval(updateClockDisplay, 1000);
+        return () => clearInterval(localClockInterval);
+    }, [fetchElectionResults]);
+
+    // 7. Function to handle casting a vote
     const castVote = async (candidateName) => {
         setErrorMessage("");
         setSuccessMessage("");
@@ -111,7 +123,7 @@ const Vote = () => {
         }
     };
 
-    // 7. Administration Panel Reset Action (Option 2 Setup)
+    // 8. Administration Panel Reset Action
     const handleResetTimer = async () => {
         setErrorMessage("");
         setSuccessMessage("");
@@ -119,12 +131,12 @@ const Vote = () => {
             const res = await fetch(`${API_URL}/timer/reset`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ durationMinutes: 5 }) // Set to 5 minutes
+                body: JSON.stringify({ durationMinutes: 5 }) // Re-initializes a clean 5-minute database slot
             });
             const data = await res.json();
             if (res.ok) {
                 alert("Master clock successfully set to 5 Minutes across all devices!");
-                window.location.reload(); // Refresh to catch new timer instant state
+                window.location.reload(); 
             } else {
                 setErrorMessage(data.error || "Reset failed");
             }
@@ -133,7 +145,7 @@ const Vote = () => {
         }
     };
 
-    // 8. Log out action
+    // 9. Log out action
     const handleLogout = () => {
         localStorage.removeItem("username");
         window.location.href = "/"; // Send back to login screen
@@ -143,7 +155,7 @@ const Vote = () => {
         <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'Arial, sans-serif', border: '1px solid #ddd', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
             
             {/* Header section */}
-            <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
                 <div>
                     <h2 style={{ margin: 0, color: '#2c3e50' }}>Secure Voting Portal</h2>
                     <span style={{ fontSize: '14px', color: '#7f8c8d' }}>Logged in as: <strong>{username}</strong></span>
@@ -167,9 +179,19 @@ const Vote = () => {
                     {!hasVoted ? (
                         <div>
                             <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#34495e' }}>Cast Your Electronic Ballot</h3>
-                            <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', transition: '0.2s' }}>Vote for PTI</button>
-                            <button onClick={() => castVote("PMLN")} style={{ width: '100%', padding: '15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px' }}>Vote for PMLN</button>
-                            <button onClick={() => castVote("Independent")} style={{ width: '100%', padding: '15px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer' }}>Vote for Independent</button>
+                            
+                            {/* Candidate Voting Buttons with Custom Electoral Symbols */}
+                            <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '22px' }}>🏏</span> Vote for PTI
+                            </button>
+                            
+                            <button onClick={() => castVote("PMLN")} style={{ width: '100%', padding: '15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '22px' }}>🦁</span> Vote for PMLN
+                            </button>
+                            
+                            <button onClick={() => castVote("Independent")} style={{ width: '100%', padding: '15px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                <span style={{ fontSize: '22px' }}>🚁</span> Vote for Independent
+                            </button>
                         </div>
                     ) : (
                         <div style={{ textAlign: 'center', padding: '30px 10px', border: '2px dashed #2ecc71', borderRadius: '8px', backgroundColor: '#f9fcf9' }}>
@@ -185,28 +207,35 @@ const Vote = () => {
                     )}
                 </div>
             ) : (
-                /* LIVE RESULTS SECTION (Automatically Unlocks when clock hits 0:00) */
+                /* LIVE RESULTS SECTION (Unlocks with Party Symbols when timer finishes) */
                 <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0' }}>📊 Final Election Scoreboard</h3>
+                    <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0' }}>
+                        📊 Final Election Scoreboard
+                    </h3>
                     <div style={{ margin: '15px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
-                            <span style={{ fontWeight: 'bold', color: '#2ecc71' }}>PTI:</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                            <span style={{ fontWeight: 'bold', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>🏏</span> PTI:
+                            </span>
                             <span style={{ fontWeight: 'bold' }}>{results.PTI || 0} votes</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #ddd' }}>
-                            <span style={{ fontWeight: 'bold', color: '#3498db' }}>PMLN:</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                            <span style={{ fontWeight: 'bold', color: '#3498db', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>🦁</span> PMLN:
+                            </span>
                             <span style={{ fontWeight: 'bold' }}>{results.PMLN || 0} votes</span>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                            <span style={{ fontWeight: 'bold', color: '#9b59b6' }}>Independent:</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
+                            <span style={{ fontWeight: 'bold', color: '#9b59b6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span>🚁</span> Independent:
+                            </span>
                             <span style={{ fontWeight: 'bold' }}>{results.Independent || 0} votes</span>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* CRITICAL UPDATE: SECURITY GUARD FOR THE TIMER CONTROL PANEL */}
-            {/* The block below will evaluate to false and hide completely unless your account name matches exactly */}
+            {/* SECURITY GUARD FOR THE TIMER CONTROL PANEL */}
             {username === "taimoor_admin" && (
                 <div style={{ backgroundColor: '#fdf6e2', padding: '20px', borderRadius: '10px', marginTop: '35px', textAlign: 'center', border: '1px dashed #e67e22' }}>
                     <h3 style={{ color: '#e67e22', margin: '0 0 5px 0', fontSize: '16px' }}>👑 Presentation Administration Panel</h3>
