@@ -3,13 +3,16 @@ import React, { useState } from 'react';
 const Login = () => {
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
-    const [message, setMessage] = useState("Account created! You can now click Log In.");
+    const [message, setMessage] = useState(""); 
     const [isError, setIsError] = useState(false);
 
     const API_URL = "https://new-voting-app-jade.vercel.app/api";
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setIsError(false);
+        setMessage("");
+
         try {
             const res = await fetch(`${API_URL}/login`, {
                 method: "POST",
@@ -18,17 +21,16 @@ const Login = () => {
             });
             const data = await res.json();
 
-            if (res.ok && data.success) {
-                // Critical Fix: Stores the username so you are no longer a Guest
-                localStorage.setItem("username", data.username);
+            if (res.ok && (data.success || data.username)) {
+                localStorage.setItem("username", data.username || username);
                 window.location.href = "/vote";
             } else {
                 setIsError(true);
-                setMessage(data.error || "Invalid credentials");
+                setMessage(data.error || "Invalid username or password.");
             }
         } catch (err) {
             setIsError(true);
-            setMessage("Login error occurred.");
+            setMessage("Login error occurred. Check backend connection.");
         }
     };
 

@@ -15,6 +15,7 @@ const Vote = () => {
     const targetTimeRef = useRef(null);
 
     const checkUserVotingStatus = useCallback(async () => {
+        if (username === "Guest") return;
         try {
             const res = await fetch(`${API_URL}/user-status?username=${encodeURIComponent(username)}`);
             const data = await res.json();
@@ -36,7 +37,6 @@ const Vote = () => {
         }
     }, [API_URL]);
 
-    // Authoritative background synchronization with backend (every 5 seconds)
     useEffect(() => {
         checkUserVotingStatus();
 
@@ -58,7 +58,6 @@ const Vote = () => {
         return () => clearInterval(syncInterval);
     }, [checkUserVotingStatus, API_URL]);
 
-    // High-precision smooth 1-second interval clock update 
     useEffect(() => {
         const updateClockDisplay = () => {
             if (!targetTimeRef.current) return;
@@ -85,6 +84,11 @@ const Vote = () => {
     const castVote = async (candidateName) => {
         setErrorMessage("");
         setSuccessMessage("");
+
+        if (username === "Guest") {
+            setErrorMessage("You are logged in as a Guest. Please sign out and log into a registered account to cast a vote.");
+            return;
+        }
 
         if (isTimerExpired) {
             setErrorMessage("Voting period has ended! You can no longer cast a vote.");
@@ -142,93 +146,95 @@ const Vote = () => {
     };
 
     return (
-        <div style={{ maxWidth: '600px', margin: '40px auto', padding: '20px', fontFamily: 'Arial, sans-serif', border: '1px solid #ddd', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
-                <div>
-                    <h2 style={{ margin: 0, color: '#2c3e50' }}>Secure Voting Portal</h2>
-                    <span style={{ fontSize: '14px', color: '#7f8c8d' }}>Logged in as: <strong>{username}</strong></span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f5f5f5', fontFamily: 'Arial, sans-serif', padding: '20px' }}>
+            <div style={{ maxWidth: '600px', width: '100%', margin: '0 auto', padding: '25px', border: '1px solid #ddd', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', backgroundColor: '#fff', boxSizing: 'border-box' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
+                    <div>
+                        <h2 style={{ margin: 0, color: '#2c3e50' }}>Secure Voting Portal</h2>
+                        <span style={{ fontSize: '14px', color: '#7f8c8d' }}>Logged in as: <strong>{username}</strong></span>
+                    </div>
+                    <button onClick={handleLogout} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
                 </div>
-                <button onClick={handleLogout} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
-            </div>
 
-            {errorMessage && <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold' }}>{errorMessage}</div>}
-            {successMessage && <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold' }}>{successMessage}</div>}
+                {errorMessage && <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold', textAlign: 'center' }}>{errorMessage}</div>}
+                {successMessage && <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold', textAlign: 'center' }}>{successMessage}</div>}
 
-            <div style={{ backgroundColor: '#34495e', color: 'white', padding: '15px', borderRadius: '8px', textAlign: 'center', marginBottom: '25px' }}>
-                <h4 style={{ margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px', color: '#bdc3c7' }}>Time Remaining for Election</h4>
-                <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'monospace' }}>{timeLeft || "Syncing..."}</div>
-            </div>
-
-            {!isTimerExpired ? (
-                <div>
-                    {!hasVoted ? (
-                        <div>
-                            <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#34495e' }}>Cast Your Electronic Ballot</h3>
-                            
-                            <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '22px' }}>🏏</span> Vote for PTI
-                            </button>
-                            
-                            <button onClick={() => castVote("PMLN")} style={{ width: '100%', padding: '15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '22px' }}>🦁</span> Vote for PMLN
-                            </button>
-                            
-                            <button onClick={() => castVote("Independent")} style={{ width: '100%', padding: '15px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
-                                <span style={{ fontSize: '22px' }}>🚁</span> Vote for Independent
-                            </button>
-                        </div>
-                    ) : (
-                        <div style={{ textAlign: 'center', padding: '30px 10px', border: '2px dashed #2ecc71', borderRadius: '8px', backgroundColor: '#f9fcf9' }}>
-                            <h3 style={{ color: '#2ecc71', margin: '0 0 10px 0' }}>✓ Ballot Cast Successfully</h3>
-                            <p style={{ color: '#555', fontSize: '15px' }}>Your user account identity has been stripped to ensure complete privacy.</p>
-                            {receiptCode && (
-                                <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#eef7ee', borderRadius: '4px', display: 'inline-block' }}>
-                                    <span style={{ fontSize: '13px', color: '#666' }}>Anonymous Receipt Token:</span>
-                                    <div style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', color: '#27ae60' }}>{receiptCode}</div>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                <div style={{ backgroundColor: '#34495e', color: 'white', padding: '15px', borderRadius: '8px', textAlign: 'center', marginBottom: '25px' }}>
+                    <h4 style={{ margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px', color: '#bdc3c7' }}>Time Remaining for Election</h4>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'monospace' }}>{timeLeft || "Syncing..."}</div>
                 </div>
-            ) : (
-                <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                        📊 Final Election Scoreboard
-                    </h3>
-                    <div style={{ margin: '15px 0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
-                            <span style={{ fontWeight: 'bold', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span>🏏</span> PTI:
-                            </span>
-                            <span style={{ fontWeight: 'bold' }}>{results.PTI || 0} votes</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
-                            <span style={{ fontWeight: 'bold', color: '#3498db', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span>🦁</span> PMLN:
-                            </span>
-                            <span style={{ fontWeight: 'bold' }}>{results.PMLN || 0} votes</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
-                            <span style={{ fontWeight: 'bold', color: '#9b59b6', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <span>🚁</span> Independent:
-                            </span>
-                            <span style={{ fontWeight: 'bold' }}>{results.Independent || 0} votes</span>
+
+                {!isTimerExpired ? (
+                    <div>
+                        {!hasVoted ? (
+                            <div>
+                                <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#34495e' }}>Cast Your Electronic Ballot</h3>
+                                
+                                <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🏏</span> Vote for PTI
+                                </button>
+                                
+                                <button onClick={() => castVote("PMLN")} style={{ width: '100%', padding: '15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🦁</span> Vote for PMLN
+                                </button>
+                                
+                                <button onClick={() => castVote("Independent")} style={{ width: '100%', padding: '15px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🚁</span> Vote for Independent
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '30px 10px', border: '2px dashed #2ecc71', borderRadius: '8px', backgroundColor: '#f9fcf9' }}>
+                                <h3 style={{ color: '#2ecc71', margin: '0 0 10px 0' }}>✓ Ballot Cast Successfully</h3>
+                                <p style={{ color: '#555', fontSize: '15px' }}>Your user account identity has been stripped to ensure complete privacy.</p>
+                                {receiptCode && (
+                                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#eef7ee', borderRadius: '4px', display: 'inline-block' }}>
+                                        <span style={{ fontSize: '13px', color: '#666' }}>Anonymous Receipt Token:</span>
+                                        <div style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', color: '#27ae60' }}>{receiptCode}</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                            📊 Final Election Scoreboard
+                        </h3>
+                        <div style={{ margin: '15px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                                <span style={{ fontWeight: 'bold', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🏏</span> PTI:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.PTI || 0} votes</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                                <span style={{ fontWeight: 'bold', color: '#3498db', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🦁</span> PMLN:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.PMLN || 0} votes</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
+                                <span style={{ fontWeight: 'bold', color: '#9b59b6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🚁</span> Independent:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.Independent || 0} votes</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {username === "taimoor_admin" && (
-                <div style={{ backgroundColor: '#fdf6e2', padding: '20px', borderRadius: '10px', marginTop: '35px', textAlign: 'center', border: '1px dashed #e67e22' }}>
-                    <h3 style={{ color: '#e67e22', margin: '0 0 5px 0', fontSize: '16px' }}>👑 Presentation Administration Panel</h3>
-                    <p style={{ color: '#7f8c8d', fontSize: '13px', margin: '0 0 15px 0' }}>This dashboard utility is isolated and hidden from ordinary voters.</p>
-                    <button onClick={handleResetTimer} style={{ backgroundColor: '#d35400', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}>
-                        🔄 Synchronize & Reset New 5-Min Timer
-                    </button>
-                </div>
-            )}
+                {username.includes("admin") && (
+                    <div style={{ backgroundColor: '#fdf6e2', padding: '20px', borderRadius: '10px', marginTop: '35px', textAlign: 'center', border: '1px dashed #e67e22' }}>
+                        <h3 style={{ color: '#e67e22', margin: '0 0 5px 0', fontSize: '16px' }}>👑 Presentation Administration Panel</h3>
+                        <p style={{ color: '#7f8c8d', fontSize: '13px', margin: '0 0 15px 0' }}>This dashboard utility is isolated and hidden from ordinary voters.</p>
+                        <button onClick={handleResetTimer} style={{ backgroundColor: '#d35400', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}>
+                            🔄 Synchronize & Reset New 5-Min Timer
+                        </button>
+                    </div>
+                )}
 
+            </div>
         </div>
     );
 };
