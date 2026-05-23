@@ -1,218 +1,243 @@
-import React, { useState, useEffect } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
-const Vote = ({ username }) => {
-  const [results, setResults] = useState({ PTI: 0, PMLN: 0, Independent: 0 });
-  const [hasVoted, setHasVoted] = useState(false);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [anonymousId, setAnonymousId] = useState("");
+const Vote = () => {
+    // Session backup fallback
+    const username = localStorage.getItem("username") || "Guest";
+    
+    const [timeLeft, setTimeLeft] = useState("");
+    const [isTimerExpired, setIsTimerExpired] = useState(false);
+    const [hasVoted, setHasVoted] = useState(false);
+    const [receiptCode, setReceiptCode] = useState("");
+    const [results, setResults] = useState({ PTI: 0, PMLN: 0, Independent: 0 });
+    const [errorMessage, setErrorMessage] = useState("");
+    const [successMessage, setSuccessMessage] = useState("");
 
-  const [timeLeft, setTimeLeft] = useState(null); 
-  const [expiresAt, setExpiresAt] = useState(null);
+    const API_URL = "https://new-voting-app-jade.vercel.app/api";
+    const targetTimeRef = useRef(null);
 
-  const fetchGlobalData = async () => {
-    try {
-      const timerRes = await fetch('/api/timer');
-      if (timerRes.ok) {
-        const timerData = await timerRes.json();
-        setExpiresAt(timerData.expiresAt);
-      }
-
-      const resRes = await fetch('/api/result');
-      const resData = await resRes.json();
-      setResults(resData);
-    } catch (err) {
-      console.error("Synchronization background failure:", err);
-    }
-  };
-
-  const handleAdminReset = async () => {
-    // Safety check block to completely prevent button click executions from unauthorized sessions
-    if (username !== "taimoor_shahid_admin") {
-      setError("Admin Control Override Denied: Unauthorized account profile.");
-      return;
-    }
-
-    try {
-      setError(null);
-      const response = await fetch('/api/timer/reset', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ durationMinutes: 10 }), 
-      });
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data.error);
-      
-      setExpiresAt(data.expiresAt); 
-      setSuccessMessage("Global cluster timer updated! Refreshing connected devices...");
-    } catch (err) {
-      setError("Admin Control Override Failure: " + err.message);
-    }
-  };
-
-  useEffect(() => {
-    fetchGlobalData();
-    const syncInterval = setInterval(fetchGlobalData, 5000);
-    return () => clearInterval(syncInterval);
-  }, []);
-
-  useEffect(() => {
-    const checkUserStatus = async () => {
-      if (!username) return;
-      try {
-        const statusRes = await fetch(`/api/user-status?username=${username}`);
-        const statusData = await statusRes.json();
-        if (statusData.hasVoted) {
-          setHasVoted(true);
-          setSuccessMessage("Your secure ballot has already been recorded in MongoDB!");
+    const checkUserVotingStatus = useCallback(async () => {
+        if (username === "Guest") return;
+        try {
+            const res = await fetch(`${API_URL}/user-status?username=${encodeURIComponent(username)}`);
+            const data = await res.json();
+            if (data.hasVoted) {
+                setHasVoted(true);
+            }
+        } catch (err) {
+            console.error("Error checking user status:", err);
         }
-      } catch (err) {
-        console.error(err);
-      }
+    }, [username, API_URL]);
+
+    const fetchElectionResults = useCallback(async () => {
+        try {
+            const res = await fetch(`${API_URL}/result`);
+            const data = await res.json();
+            setResults(data);
+        } catch (err) {
+            console.error("Error fetching results:", err);
+        }
+    }, [API_URL]);
+
+    useEffect(() => {
+        checkUserVotingStatus();
+
+        const syncTimerWithBackend = async () => {
+            try {
+                const res = await fetch(`${API_URL}/timer`);
+                const data = await res.json();
+                if (data.expiresAt) {
+                    targetTimeRef.current = new Date(data.expiresAt).getTime();
+                }
+            } catch (err) {
+                console.error("Failed to sync timer with backend:", err);
+            }
+        };
+
+        syncTimerWithBackend();
+        const syncInterval = setInterval(syncTimerWithBackend, 5000);
+
+        return () => clearInterval(syncInterval);
+    }, [checkUserVotingStatus, API_URL]);
+
+    useEffect(() => {
+        const updateClockDisplay = () => {
+            if (!targetTimeRef.current) return;
+
+            const now = new Date().getTime();
+            const difference = targetTimeRef.current - now;
+
+            if (difference <= 0) {
+                setTimeLeft("Voting Ended");
+                setIsTimerExpired(true);
+                fetchElectionResults();
+            } else {
+                setIsTimerExpired(false);
+                const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+                setTimeLeft(`${minutes}:${seconds < 10 ? '0' : ''}${seconds}`);
+            }
+        };
+
+        const localClockInterval = setInterval(updateClockDisplay, 1000);
+        return () => clearInterval(localClockInterval);
+    }, [fetchElectionResults]);
+
+    const castVote = async (candidateName) => {
+        setErrorMessage("");
+        setSuccessMessage("");
+
+        if (username === "Guest") {
+            setErrorMessage("You are logged in as a Guest. Sign out and login to vote.");
+            return;
+        }
+
+        if (isTimerExpired) {
+            setErrorMessage("Voting period has ended! You can no longer cast a vote.");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/vote`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username, candidate: candidateName })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+                setErrorMessage(data.error || "Failed to submit vote.");
+                return;
+            }
+
+            if (data.success) {
+                setHasVoted(true);
+                setReceiptCode(data.votingId);
+                setSuccessMessage(`Vote cast successfully for ${candidateName}!`);
+                if (isTimerExpired) fetchElectionResults();
+            }
+        } catch (err) {
+            setErrorMessage("Network error occurred while submitting vote.");
+        }
     };
-    checkUserStatus();
-  }, [username]);
 
-  useEffect(() => {
-    if (!expiresAt) return;
-
-    const runCountdown = () => {
-      const targetTime = new Date(expiresAt).getTime();
-      const currentTime = new Date().getTime();
-      const difference = Math.floor((targetTime - currentTime) / 1000);
-
-      if (difference <= 0) {
-        setTimeLeft(0);
-      } else {
-        setTimeLeft(difference);
-      }
+    const handleResetTimer = async () => {
+        setErrorMessage("");
+        setSuccessMessage("");
+        try {
+            const res = await fetch(`${API_URL}/timer/reset`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ durationMinutes: 5 })
+            });
+            if (res.ok) {
+                alert("Master clock successfully set to 5 Minutes across all devices!");
+                window.location.reload(); 
+            } else {
+                const data = await res.json();
+                setErrorMessage(data.error || "Reset failed");
+            }
+        } catch (err) {
+            setErrorMessage("Failed to talk to administration route.");
+        }
     };
 
-    runCountdown(); 
-    const timer = setInterval(runCountdown, 1000);
-    return () => clearInterval(timer);
-  }, [expiresAt]);
+    const handleLogout = () => {
+        localStorage.removeItem("username");
+        window.location.href = "/";
+    };
 
-  const handleVote = async (candidate) => {
-    if (timeLeft === 0) {
-      setError("Voting time has ended!");
-      return;
-    }
-    try {
-      setError(null);
-      const response = await fetch('/api/vote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, candidate }),
-      });
-      const data = await response.json();
+    return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', backgroundColor: '#f5f5f5', fontFamily: 'Arial, sans-serif', padding: '20px' }}>
+            <div style={{ maxWidth: '600px', width: '100%', margin: '0 auto', padding: '25px', border: '1px solid #ddd', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)', backgroundColor: '#fff', boxSizing: 'border-box' }}>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: '15px', marginBottom: '20px' }}>
+                    <div>
+                        <h2 style={{ margin: 0, color: '#2c3e50' }}>Secure Voting Portal</h2>
+                        <span style={{ fontSize: '14px', color: '#7f8c8d' }}>Logged in as: <strong>{username}</strong></span>
+                    </div>
+                    <button onClick={handleLogout} style={{ backgroundColor: '#e74c3c', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
+                </div>
 
-      if (!response.ok) throw new Error(data.error);
+                {errorMessage && <div style={{ backgroundColor: '#f8d7da', color: '#721c24', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold', textAlign: 'center' }}>{errorMessage}</div>}
+                {successMessage && <div style={{ backgroundColor: '#d4edda', color: '#155724', padding: '12px', borderRadius: '6px', marginBottom: '15px', fontWeight: 'bold', textAlign: 'center' }}>{successMessage}</div>}
 
-      setHasVoted(true);
-      setAnonymousId(data.votingId); 
-      setSuccessMessage("Vote submitted securely!");
+                <div style={{ backgroundColor: '#34495e', color: 'white', padding: '15px', borderRadius: '8px', textAlign: 'center', marginBottom: '25px' }}>
+                    <h4 style={{ margin: '0 0 5px 0', textTransform: 'uppercase', letterSpacing: '1px', fontSize: '13px', color: '#bdc3c7' }}>Time Remaining for Election</h4>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'monospace' }}>{timeLeft || "Syncing..."}</div>
+                </div>
 
-      const resRes = await fetch('/api/result');
-      const resData = await resRes.json();
-      setResults(resData);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
+                {!isTimerExpired ? (
+                    <div>
+                        {!hasVoted ? (
+                            <div>
+                                <h3 style={{ textAlign: 'center', marginBottom: '20px', color: '#34495e' }}>Cast Your Electronic Ballot</h3>
+                                
+                                <button onClick={() => castVote("PTI")} style={{ width: '100%', padding: '15px', backgroundColor: '#2ecc71', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🏏</span> Vote for PTI
+                                </button>
+                                
+                                <button onClick={() => castVote("PMLN")} style={{ width: '100%', padding: '15px', backgroundColor: '#3498db', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', marginBottom: '12px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🦁</span> Vote for PMLN
+                                </button>
+                                
+                                <button onClick={() => castVote("Independent")} style={{ width: '100%', padding: '15px', backgroundColor: '#9b59b6', color: 'white', border: 'none', borderRadius: '8px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '12px' }}>
+                                    <span style={{ fontSize: '22px' }}>🚁</span> Vote for Independent
+                                </button>
+                            </div>
+                        ) : (
+                            <div style={{ textAlign: 'center', padding: '30px 10px', border: '2px dashed #2ecc71', borderRadius: '8px', backgroundColor: '#f9fcf9' }}>
+                                <h3 style={{ color: '#2ecc71', margin: '0 0 10px 0' }}>✓ Ballot Cast Successfully</h3>
+                                <p style={{ color: '#555', fontSize: '15px' }}>Your user account identity has been stripped to ensure complete privacy.</p>
+                                {receiptCode && (
+                                    <div style={{ marginTop: '15px', padding: '10px', backgroundColor: '#eef7ee', borderRadius: '4px', display: 'inline-block' }}>
+                                        <span style={{ fontSize: '13px', color: '#666' }}>Anonymous Receipt Token:</span>
+                                        <div style={{ fontFamily: 'monospace', fontSize: '18px', fontWeight: 'bold', color: '#27ae60' }}>{receiptCode}</div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div style={{ backgroundColor: '#f8f9fa', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                        <h3 style={{ textAlign: 'center', color: '#2c3e50', marginTop: '0', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                            📊 Final Election Scoreboard
+                        </h3>
+                        <div style={{ margin: '15px 0' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                                <span style={{ fontWeight: 'bold', color: '#2ecc71', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🏏</span> PTI:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.PTI || 0} votes</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #ddd' }}>
+                                <span style={{ fontWeight: 'bold', color: '#3498db', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🦁</span> PMLN:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.PMLN || 0} votes</span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0' }}>
+                                <span style={{ fontWeight: 'bold', color: '#9b59b6', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>🚁</span> Independent:
+                                </span>
+                                <span style={{ fontWeight: 'bold' }}>{results.Independent || 0} votes</span>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-  const handleLogout = () => {
-    window.location.reload(); 
-  };
+                {username.includes("admin") && (
+                    <div style={{ backgroundColor: '#fdf6e2', padding: '20px', borderRadius: '10px', marginTop: '35px', textAlign: 'center', border: '1px dashed #e67e22' }}>
+                        <h3 style={{ color: '#e67e22', margin: '0 0 5px 0', fontSize: '16px' }}>👑 Presentation Administration Panel</h3>
+                        <p style={{ color: '#7f8c8d', fontSize: '13px', margin: '0 0 15px 0' }}>This dashboard utility is isolated and hidden from ordinary voters.</p>
+                        <button onClick={handleResetTimer} style={{ backgroundColor: '#d35400', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '6px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer' }}>
+                            🔄 Synchronize & Reset New 5-Min Timer
+                        </button>
+                    </div>
+                )}
 
-  const formatTime = (seconds) => {
-    if (seconds === null) return "Loading...";
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' : ''}${s}`;
-  };
-
-  return (
-    <div className="container d-flex flex-column justify-content-center align-items-center" style={{ minHeight: '90vh' }}>
-      <div className="card p-4 shadow-lg border-0 rounded-3" style={{ width: '100%', maxWidth: '500px' }}>
-        
-        <div className="d-flex justify-content-between align-items-center mb-4 border-bottom pb-2">
-          <div>
-            <h4 className="mb-0 text-dark fw-bold">Ballot Panel</h4>
-            <span className="text-muted small font-monospace">User: {username}</span>
-          </div>
-          <span className={`badge px-3 py-2 fs-6 rounded-pill ${timeLeft === 0 ? 'bg-danger' : 'bg-dark'}`}>
-            ⏱️ {formatTime(timeLeft)}
-          </span>
+            </div>
         </div>
-
-        {error && <div className="alert alert-danger text-center small p-2 fw-semibold">{error}</div>}
-        {successMessage && <div className="alert alert-success text-center small p-2 fw-semibold">{successMessage}</div>}
-        
-        {anonymousId && (
-          <div className="alert alert-light border border-info text-center font-monospace small mb-3">
-            <strong>Ballot Receipt Reference ID:</strong> <br/> {anonymousId}
-          </div>
-        )}
-
-        <div className="mt-3">
-          <button 
-            className="btn btn-outline-success w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
-            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
-            onClick={() => handleVote('PTI')}
-          >
-            <span>🏏 Vote for PTI</span>
-            {timeLeft === 0 && <span className="badge bg-success fs-6 font-monospace">{results.PTI} Votes</span>}
-          </button>
-
-          <button 
-            className="btn btn-outline-primary w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
-            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
-            onClick={() => handleVote('PMLN')}
-          >
-            <span>🦁 Vote for PMLN</span>
-            {timeLeft === 0 && <span className="badge bg-primary fs-6 font-monospace">{results.PMLN} Votes</span>}
-          </button>
-          
-          <button 
-            className="btn btn-outline-warning text-dark w-100 mb-3 py-3 d-flex justify-content-between align-items-center fw-bold" 
-            disabled={timeLeft === 0 || timeLeft === null || hasVoted} 
-            onClick={() => handleVote('Independent')}
-          >
-            <span>📢 Vote for Independent</span>
-            {timeLeft === 0 && <span className="badge bg-warning text-dark fs-6 font-monospace">{results.Independent} Votes</span>}
-          </button>
-        </div>
-
-        {timeLeft === 0 && (
-          <div className="alert alert-warning text-center fw-bold small my-2">
-            🔒 Voting Complete. Final Results Released Above!
-          </div>
-        )}
-
-        <button className="btn btn-danger w-100 mt-4 py-2 fw-semibold" onClick={handleLogout}>Log Out</button>
-      </div>
-
-      {/* Conditionally displays the admin dashboard control panel elements ONLY if your specific username is logged in */}
-      {username === "taimoor_shahid_admin" && (
-        <div className="mt-4 p-3 bg-light rounded shadow-sm text-center border" style={{ width: '100%', maxWidth: '500px' }}>
-          <p className="text-muted small mb-2 fw-semibold">⚙️ Presentation Administration Panel</p>
-          <button 
-            onClick={handleAdminReset} 
-            className="btn btn-sm btn-dark px-4 fw-bold border-0"
-            style={{ backgroundColor: '#1a1a2e' }}
-          >
-            🔄 Synchronize & Reset New 10-Min Timer
-          </button>
-          <div className="text-muted text-center mt-2" style={{ fontSize: '10px' }}>
-            Clicking this updates MongoDB instantly. All connected laptop or mobile phone clients will auto-sync within 5 seconds.
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    );
 };
 
 export default Vote;
