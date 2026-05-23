@@ -1,52 +1,49 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 
-const Vote = ({ username: propUsername }) => {
-  // Safe Fallback: Check local storage if the parent component forgot to pass the username prop
-  const username = propUsername || localStorage.getItem("username") || "Guest";
-
+const Vote = ({ username }) => {
   const [results, setResults] = useState({ PTI: 0, PMLN: 0, Independent: 0 });
   const [hasVoted, setHasVoted] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
   const [anonymousId, setAnonymousId] = useState("");
-  
+
   const [timeLeft, setTimeLeft] = useState(null); 
   const [expiresAt, setExpiresAt] = useState(null);
 
-  // FIXED: Explicit absolute production API base path
-  const API_URL = "https://new-voting-app-jade.vercel.app/api";
-
-  const fetchGlobalData = useCallback(async () => {
+  const fetchGlobalData = async () => {
     try {
-      const timerRes = await fetch(`${API_URL}/timer`);
+      const timerRes = await fetch('/api/timer');
       if (timerRes.ok) {
         const timerData = await timerRes.json();
         setExpiresAt(timerData.expiresAt);
       }
 
-      const resRes = await fetch(`${API_URL}/result`);
+      const resRes = await fetch('/api/result');
       const resData = await resRes.json();
       setResults(resData);
     } catch (err) {
       console.error("Synchronization background failure:", err);
     }
-  }, [API_URL]);
+  };
 
-  // FIXED: Added missing closing brackets around fetch config arguments
   const handleAdminReset = async () => {
+    // Safety check block to completely prevent button click executions from unauthorized sessions
+    if (username !== "taimoor_shahid_admin") {
+      setError("Admin Control Override Denied: Unauthorized account profile.");
+      return;
+    }
+
     try {
       setError(null);
-      setSuccessMessage(null);
-      
-      const response = await fetch(`${API_URL}/timer/reset`, {
+      const response = await fetch('/api/timer/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ durationMinutes: 10 })
-      }); // <-- FIXED: Added missing closing brace and parenthesis here
-      
+        body: JSON.stringify({ durationMinutes: 10 }), 
+      });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Reset failed");
+      
+      if (!response.ok) throw new Error(data.error);
       
       setExpiresAt(data.expiresAt); 
       setSuccessMessage("Global cluster timer updated! Refreshing connected devices...");
@@ -59,24 +56,24 @@ const Vote = ({ username: propUsername }) => {
     fetchGlobalData();
     const syncInterval = setInterval(fetchGlobalData, 5000);
     return () => clearInterval(syncInterval);
-  }, [fetchGlobalData]);
+  }, []);
 
   useEffect(() => {
     const checkUserStatus = async () => {
-      if (!username || username === "Guest") return;
+      if (!username) return;
       try {
-        const statusRes = await fetch(`${API_URL}/user-status?username=${encodeURIComponent(username)}`);
+        const statusRes = await fetch(`/api/user-status?username=${username}`);
         const statusData = await statusRes.json();
         if (statusData.hasVoted) {
           setHasVoted(true);
           setSuccessMessage("Your secure ballot has already been recorded in MongoDB!");
         }
       } catch (err) {
-        console.error("Status check crash:", err);
+        console.error(err);
       }
     };
     checkUserStatus();
-  }, [username, API_URL]);
+  }, [username]);
 
   useEffect(() => {
     if (!expiresAt) return;
@@ -103,13 +100,9 @@ const Vote = ({ username: propUsername }) => {
       setError("Voting time has ended!");
       return;
     }
-    if (username === "Guest") {
-      setError("Cannot submit vote as Guest user session. Please authenticate.");
-      return;
-    }
     try {
       setError(null);
-      const response = await fetch(`${API_URL}/vote`, {
+      const response = await fetch('/api/vote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, candidate }),
@@ -122,7 +115,7 @@ const Vote = ({ username: propUsername }) => {
       setAnonymousId(data.votingId); 
       setSuccessMessage("Vote submitted securely!");
 
-      const resRes = await fetch(`${API_URL}/result`);
+      const resRes = await fetch('/api/result');
       const resData = await resRes.json();
       setResults(resData);
     } catch (err) {
@@ -130,15 +123,12 @@ const Vote = ({ username: propUsername }) => {
     }
   };
 
-  // FIXED: Explicitly purges active authorization session cache token data on exit
   const handleLogout = () => {
-    localStorage.removeItem("username");
-    window.location.href = "/";
+    window.location.reload(); 
   };
 
   const formatTime = (seconds) => {
     if (seconds === null) return "Loading...";
-    if (seconds === 0) return "Voting Ended";
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
@@ -154,7 +144,7 @@ const Vote = ({ username: propUsername }) => {
             <span className="text-muted small font-monospace">User: {username}</span>
           </div>
           <span className={`badge px-3 py-2 fs-6 rounded-pill ${timeLeft === 0 ? 'bg-danger' : 'bg-dark'}`}>
-            {timeLeft === 0 ? "🔒 Ended" : `⏱️ ${formatTime(timeLeft)}`}
+            ⏱️ {formatTime(timeLeft)}
           </span>
         </div>
 
@@ -205,19 +195,22 @@ const Vote = ({ username: propUsername }) => {
         <button className="btn btn-danger w-100 mt-4 py-2 fw-semibold" onClick={handleLogout}>Log Out</button>
       </div>
 
-      <div className="mt-4 p-3 bg-light rounded shadow-sm text-center border" style={{ width: '100%', maxWidth: '500px' }}>
-        <p className="text-muted small mb-2 fw-semibold">⚙️ Presentation Administration Panel</p>
-        <button 
-          onClick={handleAdminReset} 
-          className="btn btn-sm btn-dark px-4 fw-bold border-0"
-          style={{ backgroundColor: '#1a1a2e' }}
-        >
-          🔄 Synchronize & Reset New 10-Min Timer
-        </button>
-        <div className="text-muted text-center mt-2" style={{ fontSize: '10px' }}>
-          Clicking this updates MongoDB instantly. All connected laptop or mobile phone clients will auto-sync within 5 seconds.
+      {/* Conditionally displays the admin dashboard control panel elements ONLY if your specific username is logged in */}
+      {username === "taimoor_shahid_admin" && (
+        <div className="mt-4 p-3 bg-light rounded shadow-sm text-center border" style={{ width: '100%', maxWidth: '500px' }}>
+          <p className="text-muted small mb-2 fw-semibold">⚙️ Presentation Administration Panel</p>
+          <button 
+            onClick={handleAdminReset} 
+            className="btn btn-sm btn-dark px-4 fw-bold border-0"
+            style={{ backgroundColor: '#1a1a2e' }}
+          >
+            🔄 Synchronize & Reset New 10-Min Timer
+          </button>
+          <div className="text-muted text-center mt-2" style={{ fontSize: '10px' }}>
+            Clicking this updates MongoDB instantly. All connected laptop or mobile phone clients will auto-sync within 5 seconds.
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
